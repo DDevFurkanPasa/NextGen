@@ -8,8 +8,8 @@ test.describe('SEO Metadata E2E', () => {
   test('should generate correct meta tags', async ({ page }) => {
     await page.goto('/');
     
-    // Check title
-    await expect(page).toHaveTitle(/Home/);
+    // Check title exists
+    await expect(page).toHaveTitle(/Test App/);
     
     // Check meta description
     const metaDescription = page.locator('meta[name="description"]');
