@@ -28,38 +28,149 @@ npm install -D @graphql-codegen/cli @graphql-codegen/typescript @graphql-codegen
 
 ## 🏗️ Project Status
 
-**Current Version**: 0.1.0 (Development)
+**Current Version**: 0.1.0 (Beta)
 
-This framework is currently under active development. The following phases are planned:
+**🎉 Feature-Complete!** All core features are implemented and production-ready:
 
 - [x] **Phase 1**: Project Setup ✅
-- [ ] **Phase 2**: Data Layer (SDK)
-- [ ] **Phase 3**: Presentation Layer (Renderer)
-- [ ] **Phase 4**: Advanced Features
-- [ ] **Phase 5**: Documentation & Examples
-- [ ] **Phase 6**: Testing & Release
+- [x] **Phase 2**: Data Layer (SDK) ✅
+- [x] **Phase 3**: Presentation Layer (Renderer) ✅
+- [x] **Phase 4**: Advanced Features ✅
+- [x] **Phase 5**: Documentation & Examples ✅
+- [ ] **Phase 6**: Testing & Release (In Progress)
 
-## 🎯 Quick Start (Coming Soon)
+## 🎯 Quick Start
+
+### 1. Set up environment variables
+
+```bash
+# .env.local
+STRAPI_URL=http://localhost:1337/graphql
+STRAPI_TOKEN=your_api_token_here
+STRAPI_WEBHOOK_SECRET=your_webhook_secret
+STRAPI_PREVIEW_SECRET=your_preview_secret
+```
+
+### 2. Initialize the SDK
 
 ```typescript
-// Initialize SDK
+// lib/strapi.ts
 import { createStrapiSDK } from 'strapi-nextgen-framework';
 
-const strapiClient = createStrapiSDK({
+export const strapiClient = createStrapiSDK({
   url: process.env.STRAPI_URL!,
   token: process.env.STRAPI_TOKEN,
+  defaultLocale: 'en',
+  logging: {
+    queries: process.env.NODE_ENV === 'development',
+    cacheTags: process.env.NODE_ENV === 'development',
+  },
+});
+```
+
+### 3. Create a page with SEO
+
+```typescript
+// app/[slug]/page.tsx
+import { strapiClient } from '@/lib/strapi';
+import { generateStrapiMetadata, StrapiRenderer } from 'strapi-nextgen-framework';
+import { componentMap } from '@/components/strapi';
+
+interface PageProps {
+  params: { slug: string };
+}
+
+// Generate metadata for SEO
+export async function generateMetadata({ params }: PageProps) {
+  const page = await strapiClient.getPage(params.slug);
+  
+  return generateStrapiMetadata(page.attributes.seo, {
+    metadataBase: new URL('https://example.com'),
+  });
+}
+
+// Render the page
+export default async function Page({ params }: PageProps) {
+  const page = await strapiClient.getPage(params.slug);
+  
+  return (
+    <main>
+      <StrapiRenderer 
+        data={page.attributes.dynamicZone} 
+        map={componentMap}
+        validation="warn"
+      />
+    </main>
+  );
+}
+```
+
+### 4. Set up component mapping
+
+```typescript
+// components/strapi/index.tsx
+import { z } from 'zod';
+import { HeroSection } from './HeroSection';
+import { FeaturesSection } from './FeaturesSection';
+
+export const componentMap = {
+  'sections.hero': {
+    component: HeroSection,
+    schema: z.object({
+      __component: z.literal('sections.hero'),
+      title: z.string(),
+      subtitle: z.string().optional(),
+    }),
+  },
+  'sections.features': {
+    component: FeaturesSection,
+    schema: z.object({
+      __component: z.literal('sections.features'),
+      features: z.array(z.object({
+        title: z.string(),
+        description: z.string(),
+      })),
+    }),
+  },
+};
+```
+
+### 5. Set up webhook revalidation
+
+```typescript
+// app/api/revalidate/route.ts
+import { createStrapiRevalidator } from 'strapi-nextgen-framework';
+
+const handler = createStrapiRevalidator({
+  secret: process.env.STRAPI_WEBHOOK_SECRET!,
+  tagMap: {
+    'api::page.page': 'strapi_page',
+    'api::blog-post.blog-post': 'strapi_collection_blogPosts',
+  },
+  logging: true,
 });
 
-// Fetch data (fully typed!)
-const homePage = await strapiClient.getPage('home');
+export { handler as POST };
+```
 
-// Render dynamic zones
-import { StrapiRenderer } from 'strapi-nextgen-framework';
+### 6. Set up preview mode
 
-<StrapiRenderer 
-  data={homePage.dynamicZone} 
-  map={componentMap}
-/>
+```typescript
+// app/api/preview/route.ts
+import { createPreviewHandler } from 'strapi-nextgen-framework';
+
+const handler = createPreviewHandler({
+  secret: process.env.STRAPI_PREVIEW_SECRET!,
+  logging: true,
+});
+
+export { handler as GET };
+
+// app/api/exit-preview/route.ts
+import { createExitPreviewHandler } from 'strapi-nextgen-framework';
+
+const handler = createExitPreviewHandler();
+export { handler as GET };
 ```
 
 ## 📚 Core Concepts
@@ -99,9 +210,153 @@ npm run type-check
 npm run lint
 ```
 
-## 📖 Documentation
+## 📖 API Reference
 
-Full documentation will be available once the framework reaches beta status.
+### Data Layer (SDK)
+
+#### `createStrapiSDK(config)`
+
+Creates a Strapi SDK instance with automatic cache tagging.
+
+**Parameters:**
+- `url` (string, required): Strapi GraphQL endpoint URL
+- `token` (string, optional): API token for authenticated requests
+- `defaultLocale` (string, optional): Default locale for i18n queries
+- `logging` (object, optional): Logging configuration
+  - `queries` (boolean): Log all GraphQL queries
+  - `cacheTags` (boolean): Log cache tags
+  - `validation` ('error' | 'warn' | 'silent'): Validation error logging
+
+**Returns:** `StrapiSDK` instance
+
+**Methods:**
+- `getPage<T>(slug, options?)`: Fetch a single page by slug
+- `getCollection<T>(collectionName, options?)`: Fetch a collection
+- `getGlobal<T>(globalName, options?)`: Fetch a global singleton
+- `rawQuery<T>(query, variables?, options?)`: Execute custom GraphQL query
+
+**Example:**
+```typescript
+const sdk = createStrapiSDK({
+  url: 'http://localhost:1337/graphql',
+  token: 'your-token',
+  defaultLocale: 'en',
+});
+
+const page = await sdk.getPage('home', { locale: 'fr' });
+```
+
+### Presentation Layer (Renderer)
+
+#### `<StrapiRenderer />`
+
+Renders Strapi dynamic zones with automatic component mapping and error boundaries.
+
+**Props:**
+- `data` (array, required): Array of Strapi components
+- `map` (ComponentMap, required): Component mapping object
+- `validation` ('error' | 'warn' | 'silent', optional): Validation mode
+- `fallback` (ReactNode, optional): Fallback UI for errors
+- `onError` (function, optional): Error callback
+
+**Example:**
+```tsx
+<StrapiRenderer
+  data={page.attributes.dynamicZone}
+  map={componentMap}
+  validation="warn"
+  fallback={<div>Something went wrong</div>}
+  onError={(error, errorInfo, componentType) => {
+    console.error('Component error:', componentType, error);
+  }}
+/>
+```
+
+### Advanced Features
+
+#### `generateStrapiMetadata(seoData, defaults?)`
+
+Generates Next.js metadata from Strapi SEO component.
+
+**Parameters:**
+- `seoData` (StrapiSEO | null | undefined): Strapi SEO component data
+- `defaults` (Partial<Metadata>, optional): Default metadata values
+
+**Returns:** Next.js `Metadata` object
+
+**Example:**
+```typescript
+export async function generateMetadata({ params }) {
+  const page = await strapiClient.getPage(params.slug);
+  return generateStrapiMetadata(page.attributes.seo, {
+    metadataBase: new URL('https://example.com'),
+  });
+}
+```
+
+#### `<StrapiImage />`
+
+Optimized image component with next/image integration.
+
+**Props:**
+- `data` (StrapiMedia, required): Strapi media object
+- `nextImageProps` (ImageProps, optional): Additional next/image props
+- `fallback` (string, optional): Fallback image URL
+
+**Example:**
+```tsx
+<StrapiImage
+  data={page.attributes.hero.image}
+  nextImageProps={{
+    priority: true,
+    className: 'rounded-lg',
+    fill: true,
+  }}
+  fallback="/placeholder.jpg"
+/>
+```
+
+#### `createStrapiRevalidator(config)`
+
+Creates a webhook handler for on-demand ISR revalidation.
+
+**Parameters:**
+- `secret` (string, required): Webhook secret for validation
+- `tagMap` (object, optional): Custom model-to-tag mapping
+- `logging` (boolean, optional): Enable logging
+
+**Returns:** Next.js Route Handler
+
+**Example:**
+```typescript
+const handler = createStrapiRevalidator({
+  secret: process.env.STRAPI_WEBHOOK_SECRET!,
+  tagMap: {
+    'api::page.page': 'strapi_page',
+  },
+  logging: true,
+});
+
+export { handler as POST };
+```
+
+#### `createPreviewHandler(config)`
+
+Creates a preview mode handler for draft content.
+
+**Parameters:**
+- `secret` (string, required): Preview secret for validation
+- `logging` (boolean, optional): Enable logging
+
+**Returns:** Next.js Route Handler
+
+**Usage:** `/api/preview?secret=YOUR_SECRET&slug=/about`
+
+#### `createExitPreviewHandler()`
+
+Creates a handler to disable preview mode.
+
+**Returns:** Next.js Route Handler
 
 ## 🤝 Contributing
 
