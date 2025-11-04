@@ -1,0 +1,90 @@
+{
+  "name": "strapi-nextgen-framework",
+  "version": "0.1.0",
+  "description": "A high-performance, type-safe framework bridging Strapi CMS and Next.js with automatic cache management and dynamic rendering",
+  "main": "./dist/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc && tsc -p tsconfig.esm.json",
+    "build:watch": "tsc --watch",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx,json,md}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,json,md}\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "docs": "typedoc --out docs src/index.ts",
+    "prepublishOnly": "npm run build && npm run test",
+    "clean": "rimraf dist"
+  },
+  "keywords": [
+    "strapi",
+    "nextjs",
+    "cms",
+    "headless",
+    "graphql",
+    "typescript",
+    "react",
+    "framework",
+    "isr",
+    "revalidation"
+  ],
+  "author": "Furkan Pasa",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DDevFurkanPasa/NextGen.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DDevFurkanPasa/NextGen/issues"
+  },
+  "homepage": "https://github.com/DDevFurkanPasa/NextGen#readme",
+  "peerDependencies": {
+    "next": ">=14.0.0",
+    "react": ">=18.2.0",
+    "react-dom": ">=18.2.0"
+  },
+  "dependencies": {
+    "graphql": "^16.8.1",
+    "graphql-request": "^6.1.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "@vitest/coverage-v8": "^1.0.4",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "next": "^14.0.4",
+    "prettier": "^3.1.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "rimraf": "^5.0.5",
+    "typedoc": "^0.25.4",
+    "typescript": "^5.3.3",
+    "vitest": "^1.0.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

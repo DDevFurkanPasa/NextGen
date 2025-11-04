@@ -1,12 +1,13 @@
 # Active Context
 
 ## Current Focus
-Memory Bank fully populated with NextGen Framework (Strapi-NextGen) project design. Ready to begin implementation planning.
+Phase 1 complete and verified! Build system working correctly. All placeholder functions compile successfully. Ready to begin Phase 2 (Data Layer SDK implementation).
 
 ## Next Steps
 1. ✅ Memory Bank populated with complete project design
-2. Create initial project structure and package.json
-3. Set up TypeScript configuration and build system
+2. ✅ Phase 1: Project Setup complete
+3. ✅ Build system verified (CJS + ESM outputs working)
+4. Begin Phase 2: Data Layer (SDK) implementation
 4. Implement Data Layer (SDK):
    - Create `createStrapiSDK()` factory function
    - Implement automatic cache tagging wrapper
@@ -32,6 +33,12 @@ Memory Bank fully populated with NextGen Framework (Strapi-NextGen) project desi
 - **Decision**: Use TypeScript compiler (tsc) for build, Vitest for testing
 - **Rationale**: Simple, standard tooling for library development
 - **Alternative Considered**: tsup/esbuild (may migrate later for better DX)
+- **Implementation**: Dual CJS (`dist/`) + ESM (`dist/esm/`) builds
+
+### Unused Parameter Convention
+- **Decision**: Prefix intentionally unused parameters with underscore (`_config`, `_props`)
+- **Rationale**: Standard TypeScript pattern for placeholder functions, satisfies `noUnusedParameters` rule
+- **Applied To**: All Phase 2-4 placeholder functions
 
 ### Export Strategy Decision
 - **Decision**: Named exports for all utilities, default export for main SDK

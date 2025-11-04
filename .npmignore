@@ -1,0 +1,34 @@
+# Source files
+src/
+tests/
+
+# Configuration files
+tsconfig.json
+tsconfig.esm.json
+vitest.config.ts
+.eslintrc.js
+.prettierrc.json
+.prettierignore
+
+# Development files
+.vscode/
+.idea/
+*.log
+.DS_Store
+
+# Testing
+coverage/
+*.test.ts
+*.test.tsx
+
+# Documentation source
+docs/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Memory Bank (internal documentation)
+memory-bank/
+AGENTS.md
