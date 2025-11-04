@@ -1,0 +1,22 @@
+{
+  "timestamp": "2025-11-04T21:13:36.949Z",
+  "commit": "local",
+  "initial": {
+    "heapUsed": 3895360,
+    "heapTotal": 5603328,
+    "rss": 39866368,
+    "external": 1267513
+  },
+  "final": {
+    "heapUsed": 13471176,
+    "heapTotal": 31817728,
+    "rss": 56733696,
+    "external": 1582087
+  },
+  "delta": {
+    "heapUsed": 9575816,
+    "heapTotal": 26214400,
+    "rss": 16867328,
+    "external": 314574
+  }
+}

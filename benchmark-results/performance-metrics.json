@@ -1,0 +1,37 @@
+[
+  {
+    "name": "Performance Score",
+    "unit": "score",
+    "value": 0
+  },
+  {
+    "name": "FCP (ms)",
+    "unit": "ms",
+    "value": 0
+  },
+  {
+    "name": "LCP (ms)",
+    "unit": "ms",
+    "value": 0
+  },
+  {
+    "name": "CLS",
+    "unit": "ms",
+    "value": 0
+  },
+  {
+    "name": "TBT (ms)",
+    "unit": "ms",
+    "value": 0
+  },
+  {
+    "name": "Speed Index",
+    "unit": "ms",
+    "value": 0
+  },
+  {
+    "name": "Bundle Size (KB)",
+    "unit": "KB",
+    "value": 0
+  }
+]

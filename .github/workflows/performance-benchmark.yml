@@ -1,0 +1,161 @@
+name: Performance Benchmark
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run daily at 2 AM UTC to track performance trends
+    - cron: '0 2 * * *'
+  workflow_dispatch: # Allow manual triggers
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for trend analysis
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      - name: Run Lighthouse performance benchmark
+        run: |
+          npm install -g @lhci/cli@0.13.x
+          mkdir -p .lighthouse-benchmark
+          lhci autorun --config=lighthouserc.benchmark.json
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+
+      - name: Parse Lighthouse results
+        id: lighthouse
+        run: |
+          node scripts/parse-lighthouse-results.js
+        continue-on-error: true
+
+      - name: Run bundle size analysis
+        run: |
+          npm run analyze:bundle
+          node scripts/bundle-size-check.js
+        continue-on-error: true
+
+      - name: Run memory benchmark
+        run: |
+          npm run benchmark:memory
+        continue-on-error: true
+
+      - name: Generate performance report
+        run: |
+          node scripts/generate-performance-report.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-benchmarks-${{ github.sha }}
+          path: |
+            .lighthouse-benchmark/
+            benchmark-results/
+            performance-report.json
+          retention-days: 90
+
+      - name: Store benchmark data
+        uses: benchmark-action/github-action-benchmark@v1
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          tool: 'customBiggerIsBetter'
+          output-file-path: benchmark-results/performance-metrics.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          alert-threshold: '150%'
+          comment-on-alert: true
+          fail-on-alert: false
+          alert-comment-cc-users: '@maintainers'
+
+      - name: Comment PR with performance comparison
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const reportPath = 'performance-report.json';
+            
+            if (!fs.existsSync(reportPath)) {
+              console.log('No performance report found');
+              return;
+            }
+            
+            const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+            
+            const formatMetric = (value, unit = 'ms', threshold = 0) => {
+              const emoji = value > threshold ? '🔴' : '🟢';
+              return `${emoji} ${value}${unit}`;
+            };
+            
+            const formatSize = (bytes) => {
+              const kb = (bytes / 1024).toFixed(2);
+              return `${kb} KB`;
+            };
+            
+            const comment = `
+            ## 📊 Performance Benchmark Results
+            
+            ### Core Web Vitals
+            | Metric | Current | Threshold | Status |
+            |--------|---------|-----------|--------|
+            | **FCP** | ${formatMetric(report.fcp, 'ms', 1800)} | ≤1.8s | ${report.fcp <= 1800 ? '✅' : '⚠️'} |
+            | **LCP** | ${formatMetric(report.lcp, 'ms', 2500)} | ≤2.5s | ${report.lcp <= 2500 ? '✅' : '⚠️'} |
+            | **CLS** | ${formatMetric(report.cls, '', 0.1)} | ≤0.1 | ${report.cls <= 0.1 ? '✅' : '⚠️'} |
+            | **TBT** | ${formatMetric(report.tbt, 'ms', 200)} | ≤200ms | ${report.tbt <= 200 ? '✅' : '⚠️'} |
+            | **Speed Index** | ${formatMetric(report.speedIndex, 'ms', 3400)} | ≤3.4s | ${report.speedIndex <= 3400 ? '✅' : '⚠️'} |
+            
+            ### Bundle Size
+            | Bundle | Size | Gzipped |
+            |--------|------|---------|
+            | **Main JS** | ${formatSize(report.bundles.main.raw)} | ${formatSize(report.bundles.main.gzip)} |
+            | **CSS** | ${formatSize(report.bundles.css.raw)} | ${formatSize(report.bundles.css.gzip)} |
+            | **Total** | ${formatSize(report.bundles.total.raw)} | ${formatSize(report.bundles.total.gzip)} |
+            
+            ### Performance Scores
+            - 🎯 **Performance**: ${report.scores.performance}/100
+            - ♿ **Accessibility**: ${report.scores.accessibility}/100
+            - ✨ **Best Practices**: ${report.scores.bestPractices}/100
+            - 🔍 **SEO**: ${report.scores.seo}/100
+            
+            ${report.hasRegression ? '⚠️ **Performance regression detected!** Review the changes.' : '✅ No performance regression detected.'}
+            
+            <details>
+            <summary>📈 View historical trends</summary>
+            
+            [View benchmark history](https://github.com/${{ github.repository }}/actions/workflows/performance-benchmark.yml)
+            </details>
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Check performance budget
+        run: |
+          node scripts/check-performance-budget.js
+        env:
+          FAIL_ON_BUDGET_EXCEED: 'false'

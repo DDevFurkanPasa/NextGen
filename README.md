@@ -3,7 +3,7 @@
 > A high-performance, type-safe framework bridging Strapi CMS and Next.js with automatic cache management and dynamic rendering.
 
 [![npm version](https://img.shields.io/npm/v/strapi-nextgen-framework.svg)](https://www.npmjs.com/package/strapi-nextgen-framework)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 ## 🚀 Features
 

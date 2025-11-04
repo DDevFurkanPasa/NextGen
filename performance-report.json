@@ -1,0 +1,43 @@
+{
+  "timestamp": "2025-11-04T21:10:59.464Z",
+  "commit": "local",
+  "branch": "local",
+  "hasRegression": false,
+  "issues": [],
+  "fcp": 0,
+  "lcp": 0,
+  "cls": 0,
+  "tbt": 0,
+  "speedIndex": 0,
+  "tti": 0,
+  "scores": {
+    "performance": 0,
+    "accessibility": 0,
+    "bestPractices": 0,
+    "seo": 0
+  },
+  "bundles": {
+    "main": {
+      "raw": 0,
+      "gzip": 0
+    },
+    "css": {
+      "raw": 0,
+      "gzip": 0
+    },
+    "total": {
+      "raw": 0,
+      "gzip": 0
+    }
+  },
+  "memory": null,
+  "metrics": {
+    "Performance Score": 0,
+    "FCP (ms)": 0,
+    "LCP (ms)": 0,
+    "CLS": 0,
+    "TBT (ms)": 0,
+    "Speed Index": 0,
+    "Bundle Size (KB)": 0
+  }
+}

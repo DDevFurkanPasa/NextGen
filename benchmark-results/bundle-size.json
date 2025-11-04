@@ -1,0 +1,34 @@
+{
+  "timestamp": "2025-11-04T21:13:52.607Z",
+  "commit": "local",
+  "bundles": {
+    "main": {
+      "raw": 2245,
+      "gzip": 646,
+      "budget": 153600,
+      "withinBudget": true
+    },
+    "css": {
+      "raw": 0,
+      "gzip": 0,
+      "budget": 51200,
+      "withinBudget": true
+    },
+    "total": {
+      "raw": 2245,
+      "gzip": 646,
+      "budget": 256000,
+      "withinBudget": true
+    }
+  },
+  "files": {
+    "js": [
+      {
+        "name": "index.js",
+        "size": 2245,
+        "gzip": 646
+      }
+    ],
+    "css": []
+  }
+}

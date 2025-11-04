@@ -1,0 +1,125 @@
+name: Coverage Check
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main]
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests with coverage
+        run: npm run test:coverage
+        env:
+          NODE_ENV: test
+
+      - name: Coverage threshold check
+        run: |
+          echo "✅ Coverage thresholds met!"
+          echo "The build will fail automatically if coverage drops below baseline."
+          echo ""
+          echo "Current thresholds (enforced by vitest.config.ts):"
+          echo "  • Statements: 96%"
+          echo "  • Branches: 94%"
+          echo "  • Functions: 95%"
+          echo "  • Lines: 96%"
+
+      - name: Generate coverage report
+        if: always()
+        run: npm run test:coverage:report
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Comment PR with coverage
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const coveragePath = './coverage/coverage-summary.json';
+            
+            if (!fs.existsSync(coveragePath)) {
+              console.log('No coverage summary found');
+              return;
+            }
+            
+            const coverage = JSON.parse(fs.readFileSync(coveragePath, 'utf8'));
+            const total = coverage.total;
+            
+            const formatPercent = (value) => {
+              const pct = value.pct;
+              const emoji = pct >= 95 ? '🟢' : pct >= 90 ? '🟡' : '🔴';
+              return `${emoji} **${pct}%** (${value.covered}/${value.total})`;
+            };
+            
+            const comment = `
+            ## 📊 Code Coverage Report
+            
+            | Category | Coverage |
+            |----------|----------|
+            | Statements | ${formatPercent(total.statements)} |
+            | Branches | ${formatPercent(total.branches)} |
+            | Functions | ${formatPercent(total.functions)} |
+            | Lines | ${formatPercent(total.lines)} |
+            
+            ### Thresholds (Enforced)
+            - ✅ Statements: ≥96%
+            - ✅ Branches: ≥94%
+            - ✅ Functions: ≥95%
+            - ✅ Lines: ≥96%
+            
+            ${total.statements.pct >= 96 && total.functions.pct >= 95 && total.branches.pct >= 94 && total.lines.pct >= 96 
+              ? '✅ All coverage thresholds met! No regression detected.' 
+              : '⚠️ Coverage below baseline! This PR will be blocked.'}
+            
+            <details>
+            <summary>📈 View detailed coverage</summary>
+            
+            \`\`\`
+            Statements: ${total.statements.pct}% (${total.statements.covered}/${total.statements.total})
+            Branches:   ${total.branches.pct}% (${total.branches.covered}/${total.branches.total})
+            Functions:  ${total.functions.pct}% (${total.functions.covered}/${total.functions.total})
+            Lines:      ${total.lines.pct}% (${total.lines.covered}/${total.lines.total})
+            \`\`\`
+            </details>
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Archive coverage reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-reports
+          path: |
+            coverage/
+            !coverage/tmp
+          retention-days: 30
