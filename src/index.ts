@@ -14,11 +14,11 @@ export type { StrapiSDKConfig, StrapiSDK } from './sdk/types';
 export { StrapiRenderer } from './renderer';
 export type { StrapiRendererProps, ComponentMap } from './renderer/types';
 
-// Advanced Features - To be implemented in Phase 4
+// Advanced Features - Phase 4
 export { generateStrapiMetadata } from './helpers/metadata';
-export { StrapiImage } from './components/StrapiImage';
-export { createStrapiRevalidator } from './revalidation';
-export { createPreviewHandler } from './preview';
+export { StrapiImage, type StrapiImageProps } from './components/StrapiImage';
+export { createStrapiRevalidator, type RevalidatorConfig } from './revalidation';
+export { createPreviewHandler, createExitPreviewHandler, type PreviewConfig } from './preview';
 
 // Types
 export type {

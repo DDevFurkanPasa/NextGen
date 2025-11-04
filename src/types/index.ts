@@ -82,7 +82,17 @@ export interface MediaFormat {
 }
 
 /**
- * Strapi SEO component structure (common pattern)
+ * Strapi SEO Social Media
+ */
+export interface StrapiSEOSocial {
+  socialNetwork: 'Facebook' | 'Twitter';
+  title?: string;
+  description?: string;
+  image?: StrapiMedia;
+}
+
+/**
+ * Strapi SEO component
  */
 export interface StrapiSEO {
   metaTitle?: string;
@@ -93,4 +103,5 @@ export interface StrapiSEO {
   structuredData?: Record<string, unknown>;
   metaViewport?: string;
   canonicalURL?: string;
+  metaSocial?: StrapiSEOSocial[];
 }
