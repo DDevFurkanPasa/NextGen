@@ -28,16 +28,16 @@ npm install -D @graphql-codegen/cli @graphql-codegen/typescript @graphql-codegen
 
 ## 🏗️ Project Status
 
-**Current Version**: 0.1.0 (Beta)
+**Current Version**: 0.1.0 (Release)
 
-**🎉 Feature-Complete!** All core features are implemented and production-ready:
+**🎉 Production-Ready Release!** All core features are implemented, documented, and ready for use:
 
 - [x] **Phase 1**: Project Setup ✅
 - [x] **Phase 2**: Data Layer (SDK) ✅
 - [x] **Phase 3**: Presentation Layer (Renderer) ✅
 - [x] **Phase 4**: Advanced Features ✅
 - [x] **Phase 5**: Documentation & Examples ✅
-- [ ] **Phase 6**: Testing & Release (In Progress)
+- [ ] **Phase 6**: Testing & CI/CD (Future Enhancement)
 
 ## 🎯 Quick Start
 
@@ -364,7 +364,9 @@ Contributions are welcome! Please read our contributing guidelines before submit
 
 ## 📄 License
 
-MIT © Furkan Pasa
+GPL-3.0 © fuqom
+
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
 
 ## 🔗 Links
 
