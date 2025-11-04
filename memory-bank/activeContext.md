@@ -1,7 +1,7 @@
 # Active Context
 
 ## Current Focus
-✅ **Component Tests Complete!** - Created 36 component tests for renderer (30 passing). Tests cover StrapiRenderer, Error Boundaries, and Zod validation with React Testing Library and jsdom.
+✅ **E2E Tests Complete!** - Playwright test suite created with 6 test files covering renderer, SDK, SEO, images, preview mode, and revalidation in a real Next.js environment.
 
 ## Next Steps
 1. ✅ Memory Bank populated with complete project design
