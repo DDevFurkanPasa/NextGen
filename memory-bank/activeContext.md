@@ -1,17 +1,19 @@
 # Active Context
 
 ## Current Focus
-Phase 1 complete and verified! Build system working correctly. All placeholder functions compile successfully. Ready to begin Phase 2 (Data Layer SDK implementation).
+Phase 3 complete! Presentation Layer (Renderer) fully implemented with Error Boundaries, Zod validation, component mapping, and graceful error handling. Ready for Phase 4 (Advanced Features).
 
 ## Next Steps
 1. ✅ Memory Bank populated with complete project design
 2. ✅ Phase 1: Project Setup complete
 3. ✅ Build system verified (CJS + ESM outputs working)
-4. Begin Phase 2: Data Layer (SDK) implementation
-4. Implement Data Layer (SDK):
-   - Create `createStrapiSDK()` factory function
-   - Implement automatic cache tagging wrapper
-   - Build GraphQL client integration
+4. ✅ Phase 2: Data Layer (SDK) complete
+5. ✅ Phase 3: Presentation Layer (Renderer) complete
+6. Begin Phase 4: Advanced Features implementation
+   - Build `generateStrapiMetadata()` SEO helper
+   - Create `<StrapiImage />` optimization component
+   - Implement `createStrapiRevalidator()` webhook handler
+   - Build `createPreviewHandler()` for draft mode
 5. Implement Presentation Layer (Renderer):
    - Create `<StrapiRenderer />` component
    - Implement Error Boundary wrapper
@@ -38,7 +40,32 @@ Phase 1 complete and verified! Build system working correctly. All placeholder f
 ### Unused Parameter Convention
 - **Decision**: Prefix intentionally unused parameters with underscore (`_config`, `_props`)
 - **Rationale**: Standard TypeScript pattern for placeholder functions, satisfies `noUnusedParameters` rule
-- **Applied To**: All Phase 2-4 placeholder functions
+- **Applied To**: Phase 3-4 placeholder functions (Phase 2 now fully implemented)
+
+### Cache Tag Strategy (Phase 2)
+- **Decision**: Generate consistent cache tags using pattern `strapi_{type}_{identifier}_{locale?}`
+- **Rationale**: Enables precise on-demand revalidation via webhooks
+- **Examples**: `strapi_page_home`, `strapi_collection_posts`, `strapi_global_header_fr`
+- **Implementation**: `generateCacheTag()` utility with `parseCacheTag()` for debugging
+
+### GraphQL Client Approach (Phase 2)
+- **Decision**: Use `graphql-request` with custom fetch wrapper
+- **Rationale**: Lightweight, type-safe, integrates with Next.js fetch caching
+- **Trade-off**: Simplified queries in SDK; developers use graphql-codegen for typed queries
+- **Benefit**: Automatic cache tagging without developer intervention
+
+### Error Boundary Strategy (Phase 3)
+- **Decision**: Wrap each dynamic component in individual Error Boundary
+- **Rationale**: Isolate failures - one broken component doesn't crash entire page
+- **Implementation**: Class component with getDerivedStateFromError and componentDidCatch
+- **Dev Mode**: Show detailed error UI with stack traces
+- **Prod Mode**: Hide errors or show fallback UI
+
+### Validation Strategy (Phase 3)
+- **Decision**: Optional Zod validation with 3 modes: 'error', 'warn', 'silent'
+- **Rationale**: Runtime safety for CMS data, but configurable for performance
+- **Default**: 'error' in development, 'silent' in production
+- **Benefit**: Catch corrupt CMS data before it crashes components
 
 ### Export Strategy Decision
 - **Decision**: Named exports for all utilities, default export for main SDK

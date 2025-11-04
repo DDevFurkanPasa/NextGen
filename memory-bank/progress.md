@@ -18,22 +18,22 @@
 - [x] Set up linting and formatting (ESLint + Prettier)
 - [x] Create initial project structure (/src directory)
 
-### Phase 2: Data Layer (SDK)
-- [ ] Implement `createStrapiSDK()` factory function
-- [ ] Build GraphQL client wrapper (graphql-request)
-- [ ] Implement automatic cache tagging (fetch wrapper)
-- [ ] Create query methods: `getPage()`, `getCollection()`, `getGlobal()`
-- [ ] Add `rawQuery()` escape hatch
-- [ ] Implement locale/i18n support
-- [ ] Add preview mode detection
+### Phase 2: Data Layer (SDK) ✅
+- [x] Implement `createStrapiSDK()` factory function
+- [x] Build GraphQL client wrapper (graphql-request)
+- [x] Implement automatic cache tagging (fetch wrapper)
+- [x] Create query methods: `getPage()`, `getCollection()`, `getGlobal()`
+- [x] Add `rawQuery()` escape hatch
+- [x] Implement locale/i18n support
+- [x] Add preview mode detection
 
-### Phase 3: Presentation Layer (Renderer)
-- [ ] Create `<StrapiRenderer />` component
-- [ ] Implement component mapping logic
-- [ ] Build Error Boundary wrapper
-- [ ] Add Zod validation integration
-- [ ] Create development mode error UI
-- [ ] Implement production mode graceful degradation
+### Phase 3: Presentation Layer (Renderer) ✅
+- [x] Create `<StrapiRenderer />` component
+- [x] Implement component mapping logic
+- [x] Build Error Boundary wrapper
+- [x] Add Zod validation integration
+- [x] Create development mode error UI
+- [x] Implement production mode graceful degradation
 
 ### Phase 4: Advanced Features
 - [ ] Build `generateStrapiMetadata()` SEO helper
@@ -112,6 +112,61 @@ None currently. Project is in design phase.
   - ESM: `dist/esm/index.js` + type definitions
   - Both builds compile successfully with all placeholder functions
 - **Status**: Build system fully operational, ready for Phase 2 implementation
+
+### 2025-11-04 15:44 UTC+03:00 - Phase 2: Data Layer (SDK) Complete ✅
+- **Action**: Implemented complete GraphQL-based SDK with automatic cache tagging
+- **Files Implemented**:
+  - `src/sdk/index.ts`: Main SDK factory with all query methods (186 lines)
+  - `src/sdk/cache-tags.ts`: Cache tag generation and parsing utilities (56 lines)
+  - `src/sdk/fetch-wrapper.ts`: Custom fetch wrapper for cache tag logging (23 lines)
+  - `src/sdk/types.ts`: Updated with logging configuration
+- **Features Implemented**:
+  - ✅ `createStrapiSDK()` factory function with config validation
+  - ✅ GraphQL client integration using `graphql-request`
+  - ✅ Automatic cache tag generation (`strapi_page_home`, `strapi_collection_posts`, etc.)
+  - ✅ Query methods: `getPage()`, `getCollection()`, `getGlobal()`
+  - ✅ `rawQuery()` escape hatch for custom GraphQL queries
+  - ✅ Full i18n/locale support via `QueryOptions`
+  - ✅ Draft mode detection using Next.js 14 `draftMode()`
+  - ✅ Optional query and cache tag logging
+  - ✅ Filters, sorting, and pagination support
+- **Technical Decisions**:
+  - Used `graphql-request` for GraphQL client (lightweight, type-safe)
+  - Cache tags handled via custom fetch wrapper (transparent to developer)
+  - Draft mode automatically adds `publicationState: 'PREVIEW'` to queries
+  - Simplified queries in SDK (developers use graphql-codegen for typed queries)
+- **Status**: Data Layer complete, ready for Phase 3 (Presentation Layer)
+
+### 2025-11-04 16:14 UTC+03:00 - Phase 3: Presentation Layer (Renderer) Complete ✅
+- **Action**: Implemented complete React renderer with Error Boundaries and Zod validation
+- **Files Implemented**:
+  - `src/renderer/index.tsx`: Main StrapiRenderer component (124 lines)
+  - `src/renderer/error-boundary.tsx`: ComponentErrorBoundary class component (119 lines)
+  - `src/renderer/validator.ts`: Zod validation utilities (59 lines)
+  - `src/renderer/types.ts`: Updated with proper type definitions (39 lines)
+- **Features Implemented**:
+  - ✅ `<StrapiRenderer />` component with automatic component mapping
+  - ✅ Error Boundary wrapper for each dynamic component
+  - ✅ Zod validation integration with 3 modes: 'error', 'warn', 'silent'
+  - ✅ Development mode detailed error UI with stack traces
+  - ✅ Production mode graceful degradation (silent failures)
+  - ✅ Type-safe component mapping via ComponentMap
+  - ✅ Optional fallback UI for errors
+  - ✅ Error callback for custom error handling
+  - ✅ Automatic key generation for React lists
+- **Technical Decisions**:
+  - Error Boundary per component (not per page) for isolation
+  - Development mode shows detailed error UI with stack traces
+  - Production mode hides errors or shows fallback
+  - Validation mode defaults: 'error' in dev, 'silent' in prod
+  - Type guards for runtime safety on unknown Strapi data
+- **Error Handling Strategy**:
+  - Invalid data: Log warning, return empty fragment
+  - Missing __component: Log error, skip component
+  - Unmapped component: Log error with available mappings, skip component
+  - Validation failure: Log based on mode, skip if mode is 'error'
+  - Runtime error: Caught by Error Boundary, show dev UI or fallback
+- **Status**: Presentation Layer complete, ready for Phase 4 (Advanced Features)
 
 ---
 *This document tracks project progress and evolution over time.*

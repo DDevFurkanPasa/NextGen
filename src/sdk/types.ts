@@ -8,12 +8,17 @@
 export interface StrapiSDKConfig {
   /** Strapi GraphQL endpoint URL */
   url: string;
-  /** API token for authentication */
+  /** Optional API token for authenticated requests */
   token?: string;
-  /** Logging configuration */
+  /** Default locale for i18n queries */
+  defaultLocale?: string;
+  /** Optional logging configuration */
   logging?: {
+    /** Log all GraphQL queries */
     queries?: boolean;
+    /** Log cache tags */
     cacheTags?: boolean;
+    /** Log validation errors */
     validation?: 'error' | 'warn' | 'silent';
   };
 }

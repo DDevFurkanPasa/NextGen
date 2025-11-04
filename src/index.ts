@@ -7,6 +7,7 @@
 
 // Data Layer (SDK) - To be implemented in Phase 2
 export { createStrapiSDK } from './sdk';
+export { generateCacheTag, parseCacheTag } from './sdk/cache-tags';
 export type { StrapiSDKConfig, StrapiSDK } from './sdk/types';
 
 // Presentation Layer (Renderer) - To be implemented in Phase 3

@@ -2,33 +2,37 @@
  * Renderer type definitions
  */
 
-import type { ComponentType } from 'react';
-import type { z } from 'zod';
+import type { ComponentType, ReactNode } from 'react';
+import type { ErrorInfo } from 'react';
+import type { ZodSchema } from 'zod';
 
 /**
  * Component map entry with optional schema validation
  */
-export interface ComponentMapEntry<T = unknown> {
-  component: ComponentType<T>;
-  schema?: z.ZodSchema<T>;
+export interface ComponentMapEntry {
+  /** React component to render */
+  component: ComponentType<unknown>;
+  /** Optional Zod schema for runtime validation */
+  schema?: ZodSchema;
 }
 
 /**
- * Component map for dynamic zone rendering
+ * Component map: Strapi component type -> React component
  */
-export type ComponentMap = Record<string, ComponentType<unknown> | ComponentMapEntry>;
+export type ComponentMap = Record<string, ComponentMapEntry>;
 
 /**
  * Props for StrapiRenderer component
  */
 export interface StrapiRendererProps {
-  /** Dynamic zone data from Strapi */
-  data: Array<{
-    __typename: string;
-    [key: string]: unknown;
-  }>;
-  /** Map of Strapi component names to React components */
+  /** Array of Strapi components to render (from dynamic zones) */
+  data: unknown[];
+  /** Component map */
   map: ComponentMap;
-  /** Optional fallback component for unknown types */
-  fallback?: ComponentType<{ typename: string }>;
+  /** Validation mode (default: 'error' in dev, 'silent' in prod) */
+  validation?: 'error' | 'warn' | 'silent';
+  /** Fallback UI for errors */
+  fallback?: ReactNode;
+  /** Error callback */
+  onError?: (error: Error, errorInfo: ErrorInfo, componentType: string) => void;
 }
