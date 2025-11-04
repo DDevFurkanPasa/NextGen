@@ -11,6 +11,14 @@ build/
 # Testing
 coverage/
 .nyc_output/
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Visual regression test artifacts (commit baselines, ignore diffs)
+!e2e/visual.spec.ts-snapshots/
+test-results/*-actual.png
+test-results/*-diff.png
 
 # Environment variables
 .env
