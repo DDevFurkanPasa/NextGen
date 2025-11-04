@@ -1,27 +1,72 @@
 # Active Context
 
 ## Current Focus
-Initializing Memory Bank structure and awaiting project design document.
+Memory Bank fully populated with NextGen Framework (Strapi-NextGen) project design. Ready to begin implementation planning.
 
 ## Next Steps
-1. Receive project design text from user
-2. Populate `projectbrief.md` with core requirements and goals
-3. Populate `productContext.md` with user problems and experience goals
-4. Define initial system architecture in `systemPatterns.md`
-5. Document technology stack in `techContext.md`
+1. ✅ Memory Bank populated with complete project design
+2. Create initial project structure and package.json
+3. Set up TypeScript configuration and build system
+4. Implement Data Layer (SDK):
+   - Create `createStrapiSDK()` factory function
+   - Implement automatic cache tagging wrapper
+   - Build GraphQL client integration
+5. Implement Presentation Layer (Renderer):
+   - Create `<StrapiRenderer />` component
+   - Implement Error Boundary wrapper
+   - Add Zod validation logic
+6. Implement Advanced Features:
+   - `generateStrapiMetadata()` helper
+   - `<StrapiImage />` component
+   - `createStrapiRevalidator()` webhook handler
+   - `createPreviewHandler()` for draft mode
 
 ## Active Decisions
-- Created Memory Bank structure following AGENTS.md specification
-- All core files initialized with placeholder content
-- Ready to receive project design information
+
+### Project Structure Decision
+- **Decision**: Build as npm library (not monorepo initially)
+- **Rationale**: Simpler distribution, easier for consumers to install
+- **Trade-off**: May need monorepo later for example projects
+
+### Build System Decision
+- **Decision**: Use TypeScript compiler (tsc) for build, Vitest for testing
+- **Rationale**: Simple, standard tooling for library development
+- **Alternative Considered**: tsup/esbuild (may migrate later for better DX)
+
+### Export Strategy Decision
+- **Decision**: Named exports for all utilities, default export for main SDK
+- **Rationale**: Tree-shaking friendly, clear import statements
+- **Example**: `import { createStrapiSDK, StrapiRenderer } from 'strapi-nextgen-framework'`
+
+### Documentation Strategy
+- **Decision**: JSDoc comments + auto-generated API docs + example repo
+- **Rationale**: Types serve as inline docs, examples show real usage
+- **Tools**: TypeDoc for API reference generation
 
 ## Learnings & Patterns
-- Memory Bank follows hierarchical structure: projectbrief → productContext/systemPatterns/techContext → activeContext → progress
-- Documentation-first approach: update files before and after task execution
-- Log triage protocol requires checking terminal.log after every execution
+
+### Memory Bank Workflow
+- Successfully followed AGENTS.md Plan Mode workflow
+- Read all Memory Bank files before populating
+- Documented project design in hierarchical structure
+- Each file builds on previous: projectbrief → productContext/systemPatterns/techContext → activeContext
+
+### Framework Design Insights
+- **Type Safety is Non-Negotiable**: GraphQL codegen + Zod validation = zero `any` types
+- **Performance by Default**: Automatic cache tagging removes cognitive load
+- **Resilience Over Perfection**: Error Boundaries prevent cascading failures
+- **Escape Hatches are Critical**: `rawQuery()` prevents framework lock-in
+- **DX Trumps Flexibility**: Opinionated defaults with opt-out, not opt-in
+
+### Architectural Patterns Identified
+1. **Factory Pattern**: All creation functions (`createStrapiSDK`, `createStrapiRevalidator`)
+2. **Adapter Pattern**: Future-proof for Strapi v5+ via `IStrapiAdapter` interface
+3. **Wrapper Pattern**: Transparent cache tagging via fetch wrapper
+4. **Error Boundary Pattern**: Automatic resilience for dynamic components
+5. **Escape Hatch Pattern**: Always provide `rawQuery()` for advanced use cases
 
 ## Blockers
-None. Awaiting project design input from user.
+None. All project design information captured in Memory Bank. Ready to begin implementation.
 
 ---
-*Last Updated: 2025-11-04 15:14 UTC+03:00*
+*Last Updated: 2025-11-04 15:15 UTC+03:00*
