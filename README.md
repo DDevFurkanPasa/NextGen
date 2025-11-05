@@ -4,6 +4,16 @@
 
 [![npm version](https://img.shields.io/npm/v/strapi-nextgen-framework.svg)](https://www.npmjs.com/package/strapi-nextgen-framework)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Documentation](https://img.shields.io/badge/docs-online-brightgreen.svg)](https://strapi-next-gen.vercel.app/)
+
+## 📚 [Documentation](https://strapi-next-gen.vercel.app/)
+
+**[→ Read the full documentation](https://strapi-next-gen.vercel.app/)**
+
+- [Quick Start Tutorial](https://strapi-next-gen.vercel.app/tutorials/quick-start) - Get up and running in 5 minutes
+- [API Reference](https://strapi-next-gen.vercel.app/api-reference) - Complete API documentation
+- [Guides](https://strapi-next-gen.vercel.app/guides) - Step-by-step how-to guides
+- [Concepts](https://strapi-next-gen.vercel.app/concepts) - Deep dives into architecture and design
 
 ## 🚀 Features
 
@@ -40,6 +50,8 @@ npm install -D @graphql-codegen/cli @graphql-codegen/typescript @graphql-codegen
 - [ ] **Phase 6**: Testing & CI/CD (Future Enhancement)
 
 ## 🎯 Quick Start
+
+> **💡 For a detailed step-by-step guide, see the [Quick Start Tutorial](https://strapi-next-gen.vercel.app/tutorials/quick-start) in our documentation.**
 
 ### 1. Set up environment variables
 
@@ -212,6 +224,8 @@ npm run lint
 
 ## 📖 API Reference
 
+> **📚 For complete API documentation with examples and troubleshooting, visit [API Reference](https://strapi-next-gen.vercel.app/api-reference)**
+
 ### Data Layer (SDK)
 
 #### `createStrapiSDK(config)`
@@ -370,8 +384,11 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 
 ## 🔗 Links
 
-- [GitHub Repository](https://github.com/DDevFurkanPasa/NextGen)
-- [Issue Tracker](https://github.com/DDevFurkanPasa/NextGen/issues)
+- [📚 Documentation](https://strapi-next-gen.vercel.app/) - Complete documentation site
+- [🚀 Quick Start](https://strapi-next-gen.vercel.app/tutorials/quick-start) - 5-minute setup guide
+- [📦 npm Package](https://www.npmjs.com/package/strapi-nextgen-framework)
+- [🐙 GitHub Repository](https://github.com/DDevFurkanPasa/NextGen)
+- [🐛 Issue Tracker](https://github.com/DDevFurkanPasa/NextGen/issues)
 
 ---
 
