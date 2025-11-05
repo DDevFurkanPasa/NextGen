@@ -1,6 +1,6 @@
 {
   "name": "strapi-nextgen-framework",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Production-ready, type-safe framework bridging Strapi v4 CMS and Next.js 14+ App Router with automatic cache management, Error Boundaries, and SEO optimization",
   "main": "./dist/index.js",
   "module": "./dist/esm/index.js",
