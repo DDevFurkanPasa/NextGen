@@ -1,0 +1,662 @@
+# Framework Architecture
+
+Understanding the two-layer architecture that makes Strapi-NextGen Framework maintainable and extensible.
+
+## Overview
+
+Strapi-NextGen Framework is built on a **two-layer architecture** that separates concerns and promotes clean code organization.
+
+```
+┌─────────────────────────────────────────┐
+│        Presentation Layer               │
+│  (UI Components & Rendering)            │
+│                                         │
+│  • StrapiImage                          │
+│  • StrapiRenderer                       │
+│  • Error Boundaries                     │
+└────────────────┬────────────────────────┘
+                 │
+                 │ Uses
+                 │
+┌────────────────▼────────────────────────┐
+│          Data Layer                     │
+│  (Data Fetching & Caching)              │
+│                                         │
+│  • createStrapiSDK                      │
+│  • GraphQL Client                       │
+│  • Cache Management                     │
+└────────────────┬────────────────────────┘
+                 │
+                 │ Fetches from
+                 │
+┌────────────────▼────────────────────────┐
+│        Strapi CMS                       │
+│  (Content Management)                   │
+│                                         │
+│  • GraphQL API                          │
+│  • Content Types                        │
+│  • Media Library                        │
+└─────────────────────────────────────────┘
+```
+
+## Why Two Layers?
+
+### The Problem
+
+**Monolithic approach** mixes concerns:
+
+```tsx
+// ❌ Bad: Everything mixed together
+export default async function Page() {
+  // Data fetching
+  const response = await fetch('http://localhost:1337/graphql', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: '...' }),
+  });
+  const data = await response.json();
+  
+  // Cache management
+  revalidateTag('articles');
+  
+  // Presentation logic
+  return (
+    <div>
+      <img src={data.image.url} alt={data.image.alt} />
+    </div>
+  );
+}
+```
+
+**Issues**:
+- 🔴 Tight coupling
+- 🔴 Code duplication
+- 🔴 Hard to test
+- 🔴 Difficult to maintain
+
+### The Solution
+
+**Layered approach** separates concerns:
+
+```tsx
+// ✅ Good: Clean separation
+// Data Layer
+const data = await strapi.getPage('home', GetHomePageDocument);
+
+// Presentation Layer
+return <StrapiImage data={data.image} />;
+```
+
+**Benefits**:
+- ✅ Loose coupling
+- ✅ Reusable components
+- ✅ Easy to test
+- ✅ Maintainable
+
+## Layer 1: Data Layer
+
+### Responsibilities
+
+The data layer handles:
+
+1. **Data Fetching** - GraphQL queries to Strapi
+2. **Type Safety** - TypeScript type generation
+3. **Caching** - Automatic cache management
+4. **Authentication** - API token handling
+5. **Error Handling** - Network and API errors
+
+### Core Components
+
+#### createStrapiSDK
+
+The main entry point for data fetching:
+
+```ts filename="lib/strapi.ts"
+import { createStrapiSDK } from 'strapi-nextgen-framework';
+
+export const strapi = createStrapiSDK({
+  url: process.env.NEXT_PUBLIC_STRAPI_GRAPHQL_URL!,
+  token: process.env.STRAPI_API_TOKEN,
+  logging: {
+    queries: process.env.NODE_ENV === 'development',
+  },
+});
+```
+
+**Features**:
+- Automatic cache tag generation
+- Draft mode integration
+- Type-safe queries
+- Error handling
+
+#### SDK Methods
+
+```ts
+// Fetch single page
+const page = await strapi.getPage('home', GetHomePageDocument);
+
+// Fetch collection
+const articles = await strapi.getCollection('articles', GetArticlesDocument);
+
+// Fetch global data
+const global = await strapi.getGlobal('header', GetHeaderDocument);
+
+// Raw query (full control)
+const custom = await strapi.rawQuery(CustomDocument, variables);
+```
+
+#### Cache Management
+
+Automatic cache tagging:
+
+```ts
+// Automatically tagged with 'page-home'
+const home = await strapi.getPage('home', GetHomePageDocument);
+
+// Automatically tagged with 'articles'
+const articles = await strapi.getCollection('articles', GetArticlesDocument);
+
+// Revalidate specific tag
+revalidateTag('articles');
+```
+
+### File Structure
+
+```
+src/
+├── sdk/
+│   ├── index.ts              # SDK creation & main API
+│   ├── cache-tags.ts         # Cache tag generation
+│   ├── fetch-wrapper.ts      # GraphQL client wrapper
+│   └── types.ts              # TypeScript types
+```
+
+## Layer 2: Presentation Layer
+
+### Responsibilities
+
+The presentation layer handles:
+
+1. **Rendering** - React components for UI
+2. **Error Boundaries** - Graceful error handling
+3. **Validation** - Zod schema validation
+4. **Optimization** - Image optimization, lazy loading
+5. **Accessibility** - WCAG compliance
+
+### Core Components
+
+#### StrapiImage
+
+Optimized image rendering:
+
+```tsx
+<StrapiImage
+  data={imageData}
+  nextImageProps={{
+    priority: true,
+    className: "rounded-lg",
+  }}
+/>
+```
+
+**Features**:
+- Next.js Image optimization
+- Automatic responsive images
+- Accessibility (alt text)
+- Error handling
+
+#### StrapiRenderer
+
+Dynamic component rendering:
+
+```tsx
+<StrapiRenderer
+  sections={page.sections}
+  componentMap={componentMap}
+  fallback={<DefaultSection />}
+/>
+```
+
+**Features**:
+- Dynamic zone rendering
+- Error boundaries per component
+- Type-safe component mapping
+- Fallback support
+
+#### ComponentErrorBoundary
+
+Error isolation:
+
+```tsx
+<ComponentErrorBoundary componentType="sections.hero">
+  <HeroSection {...props} />
+</ComponentErrorBoundary>
+```
+
+**Features**:
+- Development error UI
+- Production graceful degradation
+- Error logging
+- Component isolation
+
+### File Structure
+
+```
+src/
+├── components/
+│   └── StrapiImage.tsx       # Image component
+├── renderer/
+│   ├── index.tsx             # StrapiRenderer
+│   ├── error-boundary.tsx    # Error boundaries
+│   ├── validator.ts          # Zod validation
+│   └── types.ts              # TypeScript types
+```
+
+## Supporting Layers
+
+### Helpers Layer
+
+Utility functions that bridge both layers:
+
+#### Metadata Generation
+
+```ts
+import { generateStrapiMetadata } from 'strapi-nextgen-framework';
+
+export async function generateMetadata() {
+  const data = await strapi.getPage('home', GetHomePageDocument);
+  return generateStrapiMetadata(data.seo);
+}
+```
+
+#### Preview Mode
+
+```ts
+import { createPreviewHandler } from 'strapi-nextgen-framework';
+
+const handler = createPreviewHandler({
+  secret: process.env.PREVIEW_SECRET!,
+});
+```
+
+#### Revalidation
+
+```ts
+import { createStrapiRevalidator } from 'strapi-nextgen-framework';
+
+const handler = createStrapiRevalidator({
+  secret: process.env.REVALIDATION_SECRET!,
+  tagMap: {
+    'api::article.article': 'articles',
+  },
+});
+```
+
+### File Structure
+
+```
+src/
+├── helpers/
+│   └── metadata.ts           # SEO metadata
+├── preview/
+│   └── index.ts              # Preview handlers
+└── revalidation/
+    └── index.ts              # Revalidation handlers
+```
+
+## Complete Architecture
+
+### Full File Structure
+
+```
+strapi-nextgen-framework/
+├── src/
+│   ├── components/           # Presentation Layer
+│   │   └── StrapiImage.tsx
+│   ├── renderer/             # Presentation Layer
+│   │   ├── index.tsx
+│   │   ├── error-boundary.tsx
+│   │   ├── validator.ts
+│   │   └── types.ts
+│   ├── sdk/                  # Data Layer
+│   │   ├── index.ts
+│   │   ├── cache-tags.ts
+│   │   ├── fetch-wrapper.ts
+│   │   └── types.ts
+│   ├── helpers/              # Helper Functions
+│   │   └── metadata.ts
+│   ├── preview/              # Preview Handlers
+│   │   └── index.ts
+│   ├── revalidation/         # Revalidation Handlers
+│   │   └── index.ts
+│   ├── types/                # Shared Types
+│   │   └── index.ts
+│   └── index.ts              # Public API
+├── dist/                     # Build output (CJS + ESM)
+├── package.json
+└── tsconfig.json
+```
+
+## Data Flow
+
+### Page Request Flow
+
+```
+1. User Request
+   ↓
+2. Next.js Server Component
+   ↓
+3. SDK (Data Layer)
+   • Checks cache
+   • If miss, queries GraphQL
+   • Tags with cache key
+   • Returns typed data
+   ↓
+4. Component (Presentation Layer)
+   • Receives data
+   • Validates with Zod
+   • Renders UI
+   • Handles errors
+   ↓
+5. HTML Response
+```
+
+### Revalidation Flow
+
+```
+1. Content Published in Strapi
+   ↓
+2. Webhook Triggered
+   ↓
+3. Revalidation Handler
+   • Validates secret
+   • Maps model to cache tag
+   • Calls revalidateTag()
+   ↓
+4. Next.js Cache Invalidated
+   ↓
+5. Next Request Fetches Fresh Data
+```
+
+## Design Patterns
+
+### 1. Dependency Injection
+
+Components receive dependencies, not create them:
+
+```tsx
+// ✅ Good: Dependency injected
+function ArticleCard({ data }: { data: Article }) {
+  return <div>{data.title}</div>;
+}
+
+// ❌ Bad: Fetching inside component
+function ArticleCard({ id }: { id: string }) {
+  const data = await fetch(...); // Couples component to data source
+  return <div>{data.title}</div>;
+}
+```
+
+### 2. Error Boundary Pattern
+
+Isolate errors to prevent cascade failures:
+
+```tsx
+<ComponentErrorBoundary>
+  <Section1 />
+</ComponentErrorBoundary>
+<ComponentErrorBoundary>
+  <Section2 />  {/* Section1 error won't break this */}
+</ComponentErrorBoundary>
+```
+
+### 3. Factory Pattern
+
+SDK creation uses factory pattern:
+
+```ts
+// Factory creates configured instance
+export const strapi = createStrapiSDK(config);
+
+// All methods use same configuration
+strapi.getPage(...);
+strapi.getCollection(...);
+```
+
+### 4. Adapter Pattern
+
+Adapts Strapi data to Next.js formats:
+
+```ts
+// Strapi SEO → Next.js Metadata
+export function generateStrapiMetadata(seo: StrapiSEO): Metadata {
+  return {
+    title: seo?.metaTitle,
+    description: seo?.metaDescription,
+    // ... adapter logic
+  };
+}
+```
+
+## Extension Points
+
+### Custom SDK Methods
+
+Extend the SDK for your use case:
+
+```ts
+import { createStrapiSDK } from 'strapi-nextgen-framework';
+
+const baseSdk = createStrapiSDK({ ... });
+
+// Add custom method
+export const strapi = {
+  ...baseSdk,
+  async getLatestArticles(limit = 10) {
+    return baseSdk.getCollection('articles', GetArticlesDocument, {
+      pagination: { limit },
+      sort: 'publishedAt:desc',
+    });
+  },
+};
+```
+
+### Custom Components
+
+Create your own presentation components:
+
+```tsx
+import { StrapiMedia } from 'strapi-nextgen-framework';
+
+export function StrapiVideo({ data }: { data: StrapiMedia }) {
+  if (!data?.data?.attributes?.url) return null;
+  
+  return (
+    <video src={data.data.attributes.url} controls />
+  );
+}
+```
+
+### Custom Error Boundaries
+
+Wrap with your own error handling:
+
+```tsx
+import { ComponentErrorBoundary } from 'strapi-nextgen-framework';
+
+export function CustomErrorBoundary({ children }) {
+  return (
+    <ComponentErrorBoundary
+      fallback={(error) => (
+        <YourCustomErrorUI error={error} />
+      )}
+    >
+      {children}
+    </ComponentErrorBoundary>
+  );
+}
+```
+
+## Testing Strategy
+
+### Data Layer Testing
+
+Test SDK methods in isolation:
+
+```ts
+import { createStrapiSDK } from 'strapi-nextgen-framework';
+
+describe('SDK', () => {
+  it('should fetch page data', async () => {
+    const sdk = createStrapiSDK({ url: TEST_URL });
+    const data = await sdk.getPage('home', GetHomePageDocument);
+    
+    expect(data.page).toBeDefined();
+  });
+});
+```
+
+### Presentation Layer Testing
+
+Test components with mocked data:
+
+```tsx
+import { render } from '@testing-library/react';
+import { StrapiImage } from 'strapi-nextgen-framework';
+
+test('renders image', () => {
+  const mockData = { url: '/test.jpg', width: 800, height: 600 };
+  render(<StrapiImage data={mockData} />);
+  
+  expect(screen.getByRole('img')).toBeInTheDocument();
+});
+```
+
+### Integration Testing
+
+Test both layers together:
+
+```tsx
+test('page fetches and renders data', async () => {
+  const data = await strapi.getPage('home', GetHomePageDocument);
+  
+  render(<HomePage data={data} />);
+  
+  expect(screen.getByText(data.page.title)).toBeInTheDocument();
+});
+```
+
+## Performance Considerations
+
+### 1. Lazy Loading
+
+Presentation components use lazy loading:
+
+```tsx
+import dynamic from 'next/dynamic';
+
+const StrapiRenderer = dynamic(() => 
+  import('strapi-nextgen-framework').then(mod => mod.StrapiRenderer)
+);
+```
+
+### 2. Request Deduplication
+
+SDK automatically deduplicates identical requests:
+
+```ts
+// Both calls = one request
+const data1 = await strapi.getPage('home', GetHomePageDocument);
+const data2 = await strapi.getPage('home', GetHomePageDocument);
+```
+
+### 3. Parallel Fetching
+
+Fetch independent data in parallel:
+
+```ts
+const [page, global] = await Promise.all([
+  strapi.getPage('home', GetHomePageDocument),
+  strapi.getGlobal('header', GetHeaderDocument),
+]);
+```
+
+## Security Architecture
+
+### Layer Separation Benefits
+
+1. **Data Layer** - Server-only, can use secrets
+2. **Presentation Layer** - Can run client-side safely
+
+```tsx
+// ✅ Safe: SDK in server component
+export default async function Page() {
+  const data = await strapi.getPage('home', GetHomePageDocument);
+  // API token never exposed to client
+  
+  return <StrapiImage data={data.image} />;
+  // Component can be client component
+}
+```
+
+### Secret Management
+
+```ts
+// Data layer uses secrets
+const strapi = createStrapiSDK({
+  token: process.env.STRAPI_API_TOKEN, // Server-only
+});
+
+// Presentation layer has no secrets
+<StrapiImage data={publicData} />
+```
+
+## Best Practices
+
+### 1. Keep Layers Separate
+
+```tsx
+// ✅ Data layer
+const data = await strapi.getPage('home', GetHomePageDocument);
+
+// ✅ Presentation layer
+<StrapiImage data={data.image} />
+
+// ❌ Don't mix
+<StrapiImage 
+  data={await strapi.getPage('home', GetHomePageDocument).image} 
+/>
+```
+
+### 2. Use Proper Abstractions
+
+```ts
+// ✅ Use SDK methods
+await strapi.getPage('home', GetHomePageDocument);
+
+// ❌ Don't bypass
+await fetch('http://localhost:1337/graphql', ...);
+```
+
+### 3. Handle Errors at Right Layer
+
+```ts
+// ✅ Data layer handles fetch errors
+try {
+  const data = await strapi.getPage('home', GetHomePageDocument);
+} catch (error) {
+  // Handle data fetching errors
+}
+
+// ✅ Presentation layer handles render errors
+<ComponentErrorBoundary>
+  <Section data={data} />
+</ComponentErrorBoundary>
+```
+
+## See Also
+
+- [Type Safety Approach](/concepts/type-safety)
+- [Caching Strategy](/concepts/caching-strategy)
+- [Testing Philosophy](/concepts/testing-philosophy)
+- [API Reference](/api-reference)

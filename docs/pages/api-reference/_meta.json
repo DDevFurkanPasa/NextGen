@@ -1,0 +1,9 @@
+{
+  "index": "Overview",
+  "strapi-image": "StrapiImage Component",
+  "generate-metadata": "generateStrapiMetadata",
+  "create-sdk": "createStrapiSDK",
+  "strapi-renderer": "StrapiRenderer",
+  "preview-handlers": "Preview Handlers",
+  "revalidation": "Revalidation"
+}

@@ -1,0 +1,405 @@
+# Why GraphQL Over REST?
+
+Understanding the framework's decision to use GraphQL instead of REST for Strapi data fetching.
+
+## The Problem with REST + Strapi
+
+### Complex `populate` Queries
+
+With Strapi's REST API, deeply nested data requires complex population:
+
+```js
+// ❌ REST API - Complex and error-prone
+fetch('/api/articles?populate[0]=author&populate[1]=author.avatar&populate[2]=categories&populate[3]=image&populate[4]=image.formats&populate[5]=seo&populate[6]=seo.metaImage')
+```
+
+**Issues**:
+- 🔴 Manually tracking all relations
+- 🔴 Easy to miss nested fields
+- 🔴 No type safety
+- 🔴 Over-fetching data
+- 🔴 URL becomes unreadable
+
+### Over-fetching and Under-fetching
+
+```js
+// ❌ Get article, but receive ALL fields
+const article = await fetch('/api/articles/1?populate=*');
+// Returns 50+ fields when you only need 3
+```
+
+## The GraphQL Advantage
+
+### 1. Declarative Data Fetching
+
+Request exactly what you need:
+
+```graphql
+# ✅ GraphQL - Clear and precise
+query GetArticle($slug: String!) {
+  articles(filters: { slug: { eq: $slug } }) {
+    data {
+      attributes {
+        title
+        content
+        author {
+          data {
+            attributes {
+              name
+              avatar {
+                data {
+                  attributes {
+                    url
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+**Benefits**:
+- ✅ Explicit field selection
+- ✅ Clear data structure
+- ✅ No over-fetching
+- ✅ Auto-complete in IDE
+
+### 2. Automatic Type Generation
+
+GraphQL schema = TypeScript types:
+
+```bash
+npm run codegen
+```
+
+Generates:
+
+```ts
+type GetArticleQuery = {
+  articles?: {
+    data: Array<{
+      attributes?: {
+        title?: string;
+        content?: string;
+        author?: {
+          data?: {
+            attributes?: {
+              name?: string;
+              avatar?: StrapiMedia;
+            };
+          };
+        };
+      };
+    }>;
+  };
+};
+```
+
+**Benefits**:
+- ✅ Full type safety
+- ✅ Autocomplete in IDE
+- ✅ Compile-time errors
+- ✅ Refactoring confidence
+
+### 3. Single Request for Complex Data
+
+```graphql
+# ✅ One request, all related data
+query GetPage($slug: String!) {
+  pages(filters: { slug: { eq: $slug } }) {
+    data {
+      attributes {
+        title
+        sections {
+          __typename
+          ... on ComponentSectionsHero {
+            title
+            image { data { attributes { url } } }
+          }
+          ... on ComponentSectionsCta {
+            text
+            button { label, href }
+          }
+        }
+        seo {
+          metaTitle
+          metaDescription
+          metaImage { data { attributes { url } } }
+        }
+      }
+    }
+  }
+}
+```
+
+With REST, this would require:
+1. GET `/api/pages/:slug`
+2. GET `/api/upload/files/:imageId` (for each image)
+3. Multiple requests for relations
+
+### 4. Built-in Filtering and Sorting
+
+```graphql
+# ✅ Clean filtering syntax
+query GetArticles {
+  articles(
+    filters: {
+      publishedAt: { notNull: true }
+      categories: { slug: { eq: "tech" } }
+    }
+    sort: "publishedAt:desc"
+    pagination: { limit: 10 }
+  ) {
+    data {
+      attributes {
+        title
+        publishedAt
+      }
+    }
+  }
+}
+```
+
+vs REST:
+
+```js
+// ❌ Complex query string
+fetch('/api/articles?filters[publishedAt][$notNull]=true&filters[categories][slug][$eq]=tech&sort=publishedAt:desc&pagination[limit]=10')
+```
+
+## Real-World Example
+
+### Fetching a Blog Post
+
+**With REST**:
+
+```ts
+// Step 1: Get article
+const article = await fetch('/api/articles/1?populate=author,image,categories,seo,seo.metaImage');
+
+// Step 2: Parse response (no types)
+const data = await article.json();
+
+// Step 3: Get related articles manually
+const related = await fetch(`/api/articles?filters[categories]=${data.categories[0].id}&filters[id][$ne]=${data.id}`);
+
+// Total: 2+ requests, no type safety
+```
+
+**With GraphQL**:
+
+```ts
+// Step 1: Define query (with types)
+const data = await strapi.rawQuery(GetArticleDocument, {
+  slug: 'my-article',
+});
+
+// That's it! One request, fully typed
+const article = data.articles?.data[0]?.attributes;
+```
+
+## Performance Comparison
+
+| Aspect | REST | GraphQL |
+|--------|------|---------|
+| **Requests** | Multiple (3-5+) | Single |
+| **Data Size** | Over-fetched | Exact |
+| **Type Safety** | Manual | Automatic |
+| **Caching** | Limited | Granular |
+| **Developer Experience** | Error-prone | Productive |
+
+## Common Misconceptions
+
+### "GraphQL is slower than REST"
+
+**False**. With proper caching (which this framework handles), GraphQL is often faster:
+
+- ✅ Fewer requests = less latency
+- ✅ Smaller payloads = faster transfer
+- ✅ Automatic query optimization
+- ✅ Built-in caching in framework
+
+### "GraphQL is complex"
+
+**False**. The framework abstracts the complexity:
+
+```ts
+// You write this:
+const data = await strapi.getPage('home', GetHomePageDocument);
+
+// Framework handles:
+// - GraphQL query execution
+// - Cache management
+// - Type generation
+// - Error handling
+```
+
+### "REST is better for simple use cases"
+
+**Debatable**. Even simple cases benefit from GraphQL:
+
+```graphql
+# Simple: Just get a title
+query GetTitle {
+  homepage {
+    data {
+      attributes {
+        title
+      }
+    }
+  }
+}
+```
+
+vs REST still returns ALL fields:
+```js
+const data = await fetch('/api/homepage');
+// Returns 50+ fields you don't need
+```
+
+## When GraphQL Shines
+
+### 1. Complex Data Structures
+
+Perfect for CMS with:
+- Nested components
+- Dynamic zones
+- Multiple relations
+- Polymorphic content
+
+### 2. Mobile & Performance-Critical Apps
+
+- Minimize bandwidth
+- Reduce requests
+- Precise data needs
+- Offline caching
+
+### 3. Rapid Development
+
+- Auto-generated types
+- IDE autocomplete
+- Quick iterations
+- Less boilerplate
+
+## Migration from REST
+
+If you're currently using Strapi's REST API:
+
+### Before (REST):
+
+```ts
+const response = await fetch(
+  `/api/articles?populate[0]=author&populate[1]=image&populate[2]=categories`
+);
+const data = await response.json();
+
+// No types, manual parsing
+const title = data.data[0].attributes.title;
+const authorName = data.data[0].attributes.author.data.attributes.name;
+```
+
+### After (GraphQL):
+
+```graphql
+# 1. Define query
+query GetArticles {
+  articles {
+    data {
+      attributes {
+        title
+        author {
+          data {
+            attributes {
+              name
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+```ts
+// 2. Use with types
+const data = await strapi.rawQuery(GetArticlesDocument, {});
+const title = data.articles?.data[0]?.attributes?.title;
+const authorName = data.articles?.data[0]?.attributes?.author?.data?.attributes?.name;
+// Full type safety, autocomplete ✅
+```
+
+## Best Practices
+
+### 1. Request Only What You Need
+
+```graphql
+# ❌ Don't query everything
+query GetArticle {
+  articles {
+    data {
+      attributes {
+        # All 50 fields...
+      }
+    }
+  }
+}
+
+# ✅ Be specific
+query GetArticle {
+  articles {
+    data {
+      attributes {
+        title
+        excerpt
+        publishedAt
+      }
+    }
+  }
+}
+```
+
+### 2. Use Fragments for Reusability
+
+```graphql
+fragment ArticleCard on Article {
+  title
+  excerpt
+  publishedAt
+  image {
+    data {
+      attributes {
+        url
+        alternativeText
+      }
+    }
+  }
+}
+
+query GetArticles {
+  articles {
+    data {
+      attributes {
+        ...ArticleCard
+      }
+    }
+  }
+}
+```
+
+### 3. Leverage Type Generation
+
+```bash
+# Regenerate types after schema changes
+npm run codegen
+```
+
+## See Also
+
+- [GraphQL Official Docs](https://graphql.org/)
+- [Strapi GraphQL Plugin](https://docs.strapi.io/dev-docs/plugins/graphql)
+- [GraphQL Code Generator](https://the-guild.dev/graphql/codegen)
+- [Caching Strategy](/concepts/caching-strategy)

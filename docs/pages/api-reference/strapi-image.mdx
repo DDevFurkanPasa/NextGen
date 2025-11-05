@@ -1,0 +1,284 @@
+# StrapiImage
+
+Optimized image component for rendering Strapi media with Next.js Image optimization.
+
+## Import
+
+```tsx
+import { StrapiImage } from 'strapi-nextgen-framework';
+```
+
+## Usage
+
+```tsx
+<StrapiImage
+  data={imageData}
+  nextImageProps={{
+    priority: true,
+    className: "rounded-lg",
+  }}
+/>
+```
+
+## Props
+
+###
+
+ `data` (required)
+
+**Type**: `StrapiMedia['data']['attributes'] | null | undefined`
+
+The image data from Strapi. Can be extracted from your GraphQL query response.
+
+```ts
+type StrapiMediaAttributes = {
+  url: string;
+  alternativeText?: string | null;
+  width?: number | null;
+  height?: number | null;
+  formats?: {
+    thumbnail?: MediaFormat;
+    small?: MediaFormat;
+    medium?: MediaFormat;
+    large?: MediaFormat;
+  } | null;
+};
+```
+
+**Example**:
+
+```tsx
+const imageData = page.heroImage?.data?.attributes;
+
+<StrapiImage data={imageData} />
+```
+
+### `nextImageProps` (optional)
+
+**Type**: `Partial<ImageProps>`
+
+Pass-through props for Next.js `<Image />` component. All standard Next.js Image props are supported.
+
+**Common props**:
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `priority` | `boolean` | Load image eagerly (for LCP images) |
+| `quality` | `number` | Image quality (1-100, default 75) |
+| `placeholder` | `'blur' \| 'empty'` | Placeholder while loading |
+| `fill` | `boolean` | Fill parent container |
+| `sizes` | `string` | Responsive image sizes |
+| `className` | `string` | CSS class name |
+| `style` | `CSSProperties` | Inline styles |
+| `onLoad` | `() => void` | Callback when image loads |
+| `onError` | `() => void` | Callback on error |
+
+**Example with multiple props**:
+
+```tsx
+<StrapiImage
+  data={imageData}
+  nextImageProps={{
+    priority: true,
+    quality: 90,
+    className: "w-full h-auto rounded-xl shadow-2xl",
+    sizes: "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw",
+  }}
+/>
+```
+
+## Behavior
+
+### Automatic Responsive Images
+
+StrapiImage automatically uses Strapi's responsive image formats:
+
+1. Checks for `formats` in the image data
+2. Uses the best format for different screen sizes
+3. Falls back to original if no formats exist
+
+### Accessibility
+
+- ✅ Automatically includes `alt` text from `alternativeText`
+- ✅ Falls back to empty string if not provided (decorative image)
+- ✅ Proper ARIA attributes for screen readers
+
+### Performance
+
+- ✅ Lazy loading by default (set `priority={true}` for above-fold images)
+- ✅ Next.js automatic image optimization
+- ✅ Responsive srcSet generation
+- ✅ Automatic format selection (WebP, AVIF)
+
+### Error Handling
+
+- ✅ Returns `null` if `data` is `null` or `undefined`
+- ✅ Console warning in development if required fields missing
+- ✅ Graceful degradation if formats unavailable
+
+## Examples
+
+### Basic Usage
+
+```tsx
+import { strapi } from '@/lib/strapi';
+import { StrapiImage } from 'strapi-nextgen-framework';
+import { GetPageDocument } from '@/graphql/generated';
+
+export default async function Page() {
+  const data = await strapi.getPage('about', GetPageDocument);
+  const image = data.page?.data?.attributes?.image?.data?.attributes;
+
+  return (
+    <div>
+      <StrapiImage data={image} />
+    </div>
+  );
+}
+```
+
+### Hero Image (LCP)
+
+For above-the-fold images, use `priority={true}`:
+
+```tsx
+<StrapiImage
+  data={heroImage}
+  nextImageProps={{
+    priority: true,  // Load eagerly for LCP
+    className: "w-full h-[600px] object-cover",
+  }}
+/>
+```
+
+### Fill Mode (Background)
+
+For images that fill a container:
+
+```tsx
+<div className="relative w-full h-[400px]">
+  <StrapiImage
+    data={backgroundImage}
+    nextImageProps={{
+      fill: true,
+      className: "object-cover",
+      sizes: "100vw",
+    }}
+  />
+</div>
+```
+
+### Responsive Sizes
+
+Optimize for different screen sizes:
+
+```tsx
+<StrapiImage
+  data={productImage}
+  nextImageProps={{
+    sizes: "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw",
+    className: "w-full h-auto",
+  }}
+/>
+```
+
+### With Placeholder Blur
+
+```tsx
+<StrapiImage
+  data={galleryImage}
+  nextImageProps={{
+    placeholder: "blur",
+    blurDataURL: "/blur-placeholder.jpg",
+  }}
+/>
+```
+
+### Gallery Grid
+
+```tsx
+<div className="grid grid-cols-3 gap-4">
+  {images.map((img) => (
+    <StrapiImage
+      key={img.id}
+      data={img.attributes}
+      nextImageProps={{
+        className: "rounded-lg hover:scale-105 transition-transform",
+        sizes: "(max-width: 768px) 50vw, 33vw",
+      }}
+    />
+  ))}
+</div>
+```
+
+## TypeScript
+
+The component is fully typed with TypeScript:
+
+```tsx
+import type { StrapiMedia } from 'strapi-nextgen-framework';
+
+interface PageProps {
+  image: StrapiMedia;
+}
+
+function MyComponent({ image }: PageProps) {
+  return <StrapiImage data={image.data?.attributes} />;
+}
+```
+
+## Common Issues
+
+### Image Not Showing
+
+**Problem**: Image component renders but no image appears
+
+**Solutions**:
+1. Check `NEXT_PUBLIC_STRAPI_URL` in `.env.local`
+2. Verify image exists in Strapi Media Library
+3. Check browser console for 403/404 errors
+4. Ensure `url` field is in your GraphQL query
+
+### TypeScript Errors
+
+**Problem**: Type errors on `data` prop
+
+**Solutions**:
+1. Run `npm run codegen` to regenerate types
+2. Check that your GraphQL query includes all required fields:
+   ```graphql
+   image {
+     data {
+       attributes {
+         url
+         alternativeText
+         width
+         height
+       }
+     }
+   }
+   ```
+
+### Next.js Image Error
+
+**Problem**: "Invalid src prop"
+
+**Solutions**:
+1. Add Strapi domain to `next.config.js`:
+   ```js
+   images: {
+     remotePatterns: [
+       {
+         protocol: 'http',
+         hostname: 'localhost',
+         port: '1337',
+       },
+     ],
+   },
+   ```
+
+## See Also
+
+- [Next.js Image Documentation](https://nextjs.org/docs/app/api-reference/components/image)
+- [Strapi Media Library](https://docs.strapi.io/user-docs/latest/content-manager/writing-content.html#filling-up-fields)
+- [StrapiRenderer](/api-reference/strapi-renderer) - For dynamic components

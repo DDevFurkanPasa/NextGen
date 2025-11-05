@@ -1,0 +1,614 @@
+# StrapiRenderer
+
+Dynamic component renderer for Strapi's Dynamic Zones and component arrays with built-in error boundaries.
+
+## Import
+
+```tsx
+import { StrapiRenderer } from 'strapi-nextgen-framework';
+```
+
+## Usage
+
+```tsx
+<StrapiRenderer
+  sections={page.sections}
+  componentMap={componentMap}
+/>
+```
+
+## Props
+
+### `sections` (required)
+
+**Type**: `Array<{ __typename: string; [key: string]: any }> | null | undefined`
+
+Array of Strapi components from a Dynamic Zone or component array. Each component must have a `__typename` field from GraphQL.
+
+**Example from GraphQL**:
+```graphql
+query GetPage {
+  page {
+    data {
+      attributes {
+        sections {
+          __typename  # Required for component mapping
+          ... on ComponentSectionsHero {
+            title
+            subtitle
+          }
+          ... on ComponentSectionsCta {
+            text
+            button { label, href }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### `componentMap` (required)
+
+**Type**: `Record<string, React.ComponentType<any>>`
+
+Map of `__typename` to React components.
+
+**Example**:
+```tsx
+const componentMap = {
+  'ComponentSectionsHero': HeroSection,
+  'ComponentSectionsCta': CtaSection,
+  'ComponentSectionsFeatures': FeaturesSection,
+};
+```
+
+### `fallback` (optional)
+
+**Type**: `React.ReactNode | ((typename: string) => React.ReactNode)`
+
+Fallback UI for unknown or errored components.
+
+**Static Fallback**:
+```tsx
+<StrapiRenderer
+  sections={sections}
+  componentMap={componentMap}
+  fallback={<div>Component not available</div>}
+/>
+```
+
+**Dynamic Fallback**:
+```tsx
+<StrapiRenderer
+  sections={sections}
+  componentMap={componentMap}
+  fallback={(typename) => (
+    <div className="bg-yellow-100 p-4">
+      Unknown component: {typename}
+    </div>
+  )}
+/>
+```
+
+## Complete Example
+
+### 1. Define Component Map
+
+```tsx filename="lib/component-map.tsx"
+import { HeroSection } from '@/components/sections/Hero';
+import { CtaSection } from '@/components/sections/Cta';
+import { FeaturesSection } from '@/components/sections/Features';
+
+export const componentMap = {
+  'ComponentSectionsHero': HeroSection,
+  'ComponentSectionsCta': CtaSection,
+  'ComponentSectionsFeatures': FeaturesSection,
+} as const;
+```
+
+### 2. Create Section Components
+
+```tsx filename="components/sections/Hero.tsx"
+interface HeroProps {
+  title: string;
+  subtitle?: string;
+  image?: StrapiMedia;
+}
+
+export function HeroSection({ title, subtitle, image }: HeroProps) {
+  return (
+    <section className="hero">
+      <h1>{title}</h1>
+      {subtitle && <p>{subtitle}</p>}
+      {image && <StrapiImage data={image.data?.attributes} />}
+    </section>
+  );
+}
+```
+
+```tsx filename="components/sections/Cta.tsx"
+interface CtaProps {
+  text: string;
+  button: {
+    label: string;
+    href: string;
+  };
+}
+
+export function CtaSection({ text, button }: CtaProps) {
+  return (
+    <section className="cta">
+      <p>{text}</p>
+      <a href={button.href} className="button">
+        {button.label}
+      </a>
+    </section>
+  );
+}
+```
+
+### 3. Use in Page
+
+```tsx filename="app/[slug]/page.tsx"
+import { strapi } from '@/lib/strapi';
+import { StrapiRenderer } from 'strapi-nextgen-framework';
+import { componentMap } from '@/lib/component-map';
+import { GetPageDocument } from '@/graphql/generated';
+
+export default async function DynamicPage({ 
+  params 
+}: { 
+  params: { slug: string } 
+}) {
+  const data = await strapi.getPage(params.slug, GetPageDocument);
+  const page = data.page?.data?.attributes;
+
+  if (!page) {
+    return <div>Page not found</div>;
+  }
+
+  return (
+    <main>
+      <h1>{page.title}</h1>
+      
+      {/* Render all dynamic sections */}
+      <StrapiRenderer
+        sections={page.sections}
+        componentMap={componentMap}
+        fallback={(typename) => (
+          <div className="bg-yellow-100 p-4 rounded">
+            ⚠️ Component "{typename}" not implemented yet
+          </div>
+        )}
+      />
+    </main>
+  );
+}
+```
+
+## How It Works
+
+### 1. Component Lookup
+
+For each section, the renderer:
+1. Reads the `__typename` field
+2. Looks up the component in `componentMap`
+3. Renders the component with the section data as props
+
+```tsx
+// Section data from Strapi
+{
+  __typename: 'ComponentSectionsHero',
+  title: 'Welcome',
+  subtitle: 'To our site'
+}
+
+// Renderer looks up 'ComponentSectionsHero' in componentMap
+// Finds: HeroSection
+// Renders: <HeroSection title="Welcome" subtitle="To our site" />
+```
+
+### 2. Error Boundary
+
+Each component is wrapped in an error boundary:
+
+```tsx
+// If HeroSection throws an error:
+<ComponentErrorBoundary componentType="ComponentSectionsHero">
+  <HeroSection {...props} />
+</ComponentErrorBoundary>
+
+// In production: Renders fallback or null
+// In development: Shows detailed error UI
+```
+
+### 3. Missing Components
+
+If a component is not in the map:
+
+```tsx
+// Section with unknown typename
+{
+  __typename: 'ComponentSectionsNewSection',
+  ...data
+}
+
+// Renderer can't find 'ComponentSectionsNewSection' in componentMap
+// Renders fallback instead
+```
+
+## Error Handling
+
+### Development Mode
+
+Shows detailed error information:
+
+```tsx
+// Component throws error
+export function HeroSection({ title }: HeroProps) {
+  throw new Error('Something went wrong');
+}
+
+// Development output:
+┌─────────────────────────────────────┐
+│ Component Error: ComponentSectionsHero │
+│ Something went wrong                │
+│                                     │
+│ Stack trace...                      │
+└─────────────────────────────────────┘
+```
+
+### Production Mode
+
+Graceful degradation:
+
+```tsx
+// Same error in production:
+// - No error shown to user
+// - Component silently skipped
+// - Or fallback rendered (if provided)
+// - Error logged to console
+```
+
+### Custom Error Handling
+
+```tsx
+<StrapiRenderer
+  sections={sections}
+  componentMap={componentMap}
+  fallback={(typename) => {
+    // Log to error tracking service
+    console.error('Component error:', typename);
+    
+    // Return user-friendly message
+    return (
+      <div className="error-fallback">
+        <p>This section is temporarily unavailable.</p>
+      </div>
+    );
+  }}
+/>
+```
+
+## Advanced Patterns
+
+### Conditional Rendering
+
+```tsx
+<StrapiRenderer
+  sections={page.sections?.filter(section => 
+    section.__typename !== 'ComponentSectionsDraft'
+  )}
+  componentMap={componentMap}
+/>
+```
+
+### Section Wrappers
+
+```tsx
+const componentMap = {
+  'ComponentSectionsHero': (props) => (
+    <div className="container mx-auto">
+      <HeroSection {...props} />
+    </div>
+  ),
+  'ComponentSectionsCta': (props) => (
+    <div className="bg-blue-500">
+      <CtaSection {...props} />
+    </div>
+  ),
+};
+```
+
+### Type-Safe Component Map
+
+```tsx
+import type { ComponentSectionsHero, ComponentSectionsCta } from '@/graphql/generated';
+
+const componentMap: Record<string, React.ComponentType<any>> = {
+  'ComponentSectionsHero': (props: ComponentSectionsHero) => (
+    <HeroSection {...props} />
+  ),
+  'ComponentSectionsCta': (props: ComponentSectionsCta) => (
+    <CtaSection {...props} />
+  ),
+};
+```
+
+### Lazy Loading Components
+
+```tsx
+import dynamic from 'next/dynamic';
+
+const HeroSection = dynamic(() => import('@/components/sections/Hero'));
+const CtaSection = dynamic(() => import('@/components/sections/Cta'));
+
+const componentMap = {
+  'ComponentSectionsHero': HeroSection,
+  'ComponentSectionsCta': CtaSection,
+};
+```
+
+### Analytics Tracking
+
+```tsx
+const componentMap = {
+  'ComponentSectionsHero': (props) => {
+    useEffect(() => {
+      trackEvent('hero_viewed', { title: props.title });
+    }, []);
+    
+    return <HeroSection {...props} />;
+  },
+};
+```
+
+## TypeScript
+
+### Typed Component Map
+
+```tsx
+import type { FC } from 'react';
+
+type SectionComponent<T = any> = FC<T>;
+
+interface ComponentMap {
+  [key: string]: SectionComponent;
+}
+
+const componentMap: ComponentMap = {
+  'ComponentSectionsHero': HeroSection,
+  'ComponentSectionsCta': CtaSection,
+};
+```
+
+### Typed Sections
+
+```tsx
+import type { PageSections } from '@/graphql/generated';
+
+interface PageProps {
+  sections: PageSections;
+}
+
+export function DynamicContent({ sections }: PageProps) {
+  return (
+    <StrapiRenderer
+      sections={sections}
+      componentMap={componentMap}
+    />
+  );
+}
+```
+
+## Best Practices
+
+### 1. Centralize Component Map
+
+```tsx
+// ✅ Single source of truth
+// lib/component-map.tsx
+export const componentMap = { ... };
+
+// ❌ Don't duplicate
+const map1 = { ... };
+const map2 = { ... };
+```
+
+### 2. Use Descriptive Names
+
+```tsx
+// ✅ Clear component names
+'ComponentSectionsHero': HeroSection,
+'ComponentSectionsCta': CallToActionSection,
+
+// ❌ Vague names
+'Section1': Component1,
+'Section2': Component2,
+```
+
+### 3. Always Provide Fallback
+
+```tsx
+// ✅ Graceful fallback
+<StrapiRenderer
+  sections={sections}
+  componentMap={componentMap}
+  fallback={<DefaultSection />}
+/>
+
+// ⚠️ No fallback = nothing renders for unknown components
+<StrapiRenderer
+  sections={sections}
+  componentMap={componentMap}
+/>
+```
+
+### 4. Include __typename in Queries
+
+```graphql
+# ✅ Include __typename
+sections {
+  __typename
+  ... on ComponentSectionsHero {
+    title
+  }
+}
+
+# ❌ Missing __typename = renderer can't map components
+sections {
+  ... on ComponentSectionsHero {
+    title
+  }
+}
+```
+
+## Common Issues
+
+### Components Not Rendering
+
+**Problem**: Sections don't appear on page
+
+**Solutions**:
+1. Check `__typename` is in GraphQL query
+2. Verify `__typename` matches key in `componentMap`
+3. Check component is exported correctly
+4. Look for console errors in development
+
+### TypeScript Errors
+
+**Problem**: Type errors on component props
+
+**Solutions**:
+1. Run `npm run codegen` to regenerate types
+2. Import types from `graphql/generated.ts`
+3. Add type annotations to component props
+4. Use `as const` for component map
+
+### Error Boundary Not Working
+
+**Problem**: Errors crash the entire page
+
+**Solutions**:
+1. Verify you're using `StrapiRenderer` (has built-in error boundaries)
+2. Check errors are thrown inside component render, not in async code
+3. Test in both development and production modes
+
+### Fallback Not Showing
+
+**Problem**: Missing components show nothing
+
+**Solutions**:
+1. Ensure `fallback` prop is provided
+2. Check fallback returns valid React node
+3. Verify component exists in `componentMap`
+
+## Strapi Setup
+
+### 1. Create Dynamic Zone
+
+In Strapi Content-Type Builder:
+
+1. Add field → **Dynamic Zone**
+2. Name it (e.g., `sections`)
+3. Add components to the zone
+
+### 2. Create Components
+
+For each section type:
+
+1. Create component (e.g., `sections.hero`)
+2. Add fields (title, subtitle, etc.)
+3. Save component
+
+### 3. GraphQL Query
+
+```graphql
+query GetPage($slug: String!) {
+  pages(filters: { slug: { eq: $slug } }) {
+    data {
+      attributes {
+        title
+        sections {
+          __typename
+          ... on ComponentSectionsHero {
+            title
+            subtitle
+            image {
+              data {
+                attributes {
+                  url
+                  alternativeText
+                }
+              }
+            }
+          }
+          ... on ComponentSectionsCta {
+            text
+            button {
+              label
+              href
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+## Testing
+
+### Unit Test
+
+```tsx
+import { render, screen } from '@testing-library/react';
+import { StrapiRenderer } from 'strapi-nextgen-framework';
+
+const mockSections = [
+  {
+    __typename: 'ComponentSectionsHero',
+    title: 'Test Hero',
+  },
+];
+
+const mockComponentMap = {
+  'ComponentSectionsHero': ({ title }) => <h1>{title}</h1>,
+};
+
+test('renders components from sections', () => {
+  render(
+    <StrapiRenderer
+      sections={mockSections}
+      componentMap={mockComponentMap}
+    />
+  );
+  
+  expect(screen.getByText('Test Hero')).toBeInTheDocument();
+});
+```
+
+### E2E Test
+
+```ts
+// e2e/dynamic-page.spec.ts
+import { test, expect } from '@playwright/test';
+
+test('renders all page sections', async ({ page }) => {
+  await page.goto('/about');
+  
+  // Verify hero section
+  await expect(page.locator('h1')).toContainText('About Us');
+  
+  // Verify CTA section
+  await expect(page.locator('.cta')).toBeVisible();
+});
+```
+
+## See Also
+
+- [StrapiImage Component](/api-reference/strapi-image)
+- [createStrapiSDK](/api-reference/create-sdk)
+- [Error Handling Guide](/guides/error-handling)
+- [Dynamic Zones Guide](/guides/dynamic-zones)

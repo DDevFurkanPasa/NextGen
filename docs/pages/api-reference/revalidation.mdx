@@ -1,0 +1,617 @@
+# Revalidation
+
+API route handler for on-demand cache revalidation via Strapi webhooks.
+
+## Import
+
+```tsx
+import { createStrapiRevalidator } from 'strapi-nextgen-framework';
+```
+
+## Usage
+
+```ts filename="app/api/revalidate/route.ts"
+import { createStrapiRevalidator } from 'strapi-nextgen-framework';
+
+const handler = createStrapiRevalidator({
+  secret: process.env.REVALIDATION_SECRET!,
+  tagMap: {
+    'api::article.article': 'articles',
+    'api::page.page': 'pages',
+  },
+});
+
+export const POST = handler;
+```
+
+## Parameters
+
+### `config` (required)
+
+**Type**: `RevalidatorConfig`
+
+Configuration object for the revalidation handler.
+
+```ts
+interface RevalidatorConfig {
+  secret: string;
+  tagMap?: Record<string, string | string[]>;
+  onRevalidate?: (tag: string) => void;
+  onError?: (error: Error) => void;
+}
+```
+
+## Configuration Options
+
+### `secret` (required)
+
+**Type**: `string`
+
+Secret key to validate webhook requests. Must match the secret in Strapi webhook configuration.
+
+```ts
+const handler = createStrapiRevalidator({
+  secret: process.env.REVALIDATION_SECRET!,
+});
+```
+
+**Environment Variable**:
+```bash filename=".env.local"
+REVALIDATION_SECRET=your-random-secret-minimum-32-characters
+```
+
+**Generate a secure secret**:
+```bash
+openssl rand -base64 32
+```
+
+### `tagMap` (optional)
+
+**Type**: `Record<string, string | string[]>`
+
+Maps Strapi content type UIDs to Next.js cache tags.
+
+```ts
+const handler = createStrapiRevalidator({
+  secret: process.env.REVALIDATION_SECRET!,
+  tagMap: {
+    // Model UID → Cache tag(s)
+    'api::article.article': 'articles',
+    'api::page.page': 'pages',
+    'api::global.global': ['global', 'header', 'footer'],
+  },
+});
+```
+
+**Auto-generation**: If `tagMap` is omitted, tags are auto-generated from model UIDs:
+- `api::article.article` → `article`
+- `api::page.page` → `page`
+- `api::global.global` → `global`
+
+### `onRevalidate` (optional)
+
+**Type**: `(tag: string) => void`
+
+Callback invoked when a cache tag is revalidated.
+
+```ts
+const handler = createStrapiRevalidator({
+  secret: process.env.REVALIDATION_SECRET!,
+  onRevalidate: (tag) => {
+    console.log(`✅ Revalidated cache tag: ${tag}`);
+  },
+});
+```
+
+### `onError` (optional)
+
+**Type**: `(error: Error) => void`
+
+Callback invoked when revalidation fails.
+
+```ts
+const handler = createStrapiRevalidator({
+  secret: process.env.REVALIDATION_SECRET!,
+  onError: (error) => {
+    console.error('❌ Revalidation error:', error);
+    // Send to error tracking service
+  },
+});
+```
+
+## Return Value
+
+**Type**: `(request: NextRequest) => Promise<Response>`
+
+A Next.js Route Handler function compatible with App Router.
+
+## Webhook Payload
+
+Strapi sends this payload on content changes:
+
+```json
+{
+  "event": "entry.publish",
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "model": "api::article.article",
+  "entry": {
+    "id": 1,
+    "slug": "my-article",
+    "title": "My Article",
+    // ... other fields
+  }
+}
+```
+
+**Events**:
+- `entry.create`
+- `entry.update`
+- `entry.delete`
+- `entry.publish`
+- `entry.unpublish`
+
+## Response
+
+### Success (200)
+
+```json
+{
+  "revalidated": true,
+  "tag": "articles"
+}
+```
+
+### Unauthorized (401)
+
+```json
+{
+  "revalidated": false,
+  "error": "Invalid secret"
+}
+```
+
+### Error (500)
+
+```json
+{
+  "revalidated": false,
+  "error": "Revalidation failed"
+}
+```
+
+## Complete Setup Example
+
+### 1. Create Revalidation Route
+
+```ts filename="app/api/revalidate/route.ts"
+import { createStrapiRevalidator } from 'strapi-nextgen-framework';
+
+const handler = createStrapiRevalidator({
+  secret: process.env.REVALIDATION_SECRET!,
+  tagMap: {
+    'api::article.article': 'articles',
+    'api::page.page': 'pages',
+    'api::global.global': 'global',
+  },
+  onRevalidate: (tag) => {
+    console.log(`✅ Cache revalidated: ${tag}`);
+  },
+  onError: (error) => {
+    console.error('❌ Revalidation error:', error);
+  },
+});
+
+export const POST = handler;
+```
+
+### 2. Add Environment Variable
+
+```bash filename=".env.local"
+REVALIDATION_SECRET=generate-secure-random-secret-32-chars-minimum
+```
+
+### 3. Configure Strapi Webhook
+
+In Strapi Admin → Settings → Webhooks:
+
+**Name**: Next.js Revalidation
+
+**URL**: `https://your-site.com/api/revalidate`
+
+**Headers**:
+```json
+{
+  "Authorization": "Bearer your-revalidation-secret"
+}
+```
+
+**Events**:
+- [x] entry.create
+- [x] entry.update
+- [x] entry.delete
+- [x] entry.publish
+- [x] entry.unpublish
+
+**For Local Development** (use ngrok):
+```bash
+ngrok http 3000
+# URL: https://abc123.ngrok.io/api/revalidate
+```
+
+### 4. Tag Your Data Fetching
+
+```ts filename="lib/get-articles.ts"
+import { unstable_cache } from 'next/cache';
+import { strapi } from '@/lib/strapi';
+import { GetArticlesDocument } from '@/graphql/generated';
+
+export const getArticles = unstable_cache(
+  async () => {
+    return await strapi.getCollection('articles', GetArticlesDocument);
+  },
+  ['articles-list'],
+  {
+    tags: ['articles'], // 👈 Matches tagMap
+    revalidate: 3600,   // Fallback
+  }
+);
+```
+
+## How It Works
+
+### 1. Content Published in Strapi
+
+Editor publishes an article.
+
+### 2. Webhook Triggered
+
+Strapi sends POST to `/api/revalidate`:
+
+```json
+{
+  "event": "entry.publish",
+  "model": "api::article.article",
+  "entry": { "id": 1, "slug": "new-article" }
+}
+```
+
+### 3. Handler Validates Secret
+
+```ts
+// Checks Authorization header
+const authHeader = request.headers.get('authorization');
+const token = authHeader?.replace('Bearer ', '');
+
+if (token !== secret) {
+  return 401 Unauthorized;
+}
+```
+
+### 4. Model Mapped to Tag
+
+```ts
+// Looks up in tagMap
+'api::article.article' → 'articles'
+```
+
+### 5. Cache Invalidated
+
+```ts
+import { revalidateTag } from 'next/cache';
+
+revalidateTag('articles');
+// All cached data with tag 'articles' is invalidated
+```
+
+### 6. Next Request Fetches Fresh Data
+
+```ts
+// User visits /blog
+const articles = await getArticles();
+// Cache miss → fetches from Strapi
+// Returns fresh data including new article
+```
+
+## Advanced Patterns
+
+### Multiple Tags Per Model
+
+```ts
+const handler = createStrapiRevalidator({
+  secret: process.env.REVALIDATION_SECRET!,
+  tagMap: {
+    // Invalidate multiple tags
+    'api::article.article': ['articles', 'blog', 'feed'],
+    'api::global.global': ['global', 'header', 'footer', 'navigation'],
+  },
+});
+```
+
+### Conditional Revalidation
+
+```ts filename="app/api/revalidate/route.ts"
+import { NextRequest, NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
+
+export async function POST(request: NextRequest) {
+  // Validate secret
+  const authHeader = request.headers.get('authorization');
+  const secret = authHeader?.replace('Bearer ', '');
+  
+  if (secret !== process.env.REVALIDATION_SECRET) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const payload = await request.json();
+  const { model, entry, event } = payload;
+
+  // Only revalidate on publish
+  if (event !== 'entry.publish') {
+    return NextResponse.json({ skipped: true }, { status: 200 });
+  }
+
+  // Revalidate specific article
+  if (model === 'api::article.article') {
+    revalidateTag('articles');
+    revalidateTag(`article-${entry.slug}`);
+  }
+
+  return NextResponse.json({ revalidated: true }, { status: 200 });
+}
+```
+
+### Path Revalidation
+
+```ts
+import { revalidatePath } from 'next/cache';
+
+// Revalidate specific paths
+revalidatePath('/');
+revalidatePath('/blog');
+revalidatePath(`/blog/${entry.slug}`);
+
+// Revalidate layout and all nested routes
+revalidatePath('/blog', 'layout');
+```
+
+### Logging & Monitoring
+
+```ts filename="app/api/revalidate/route.ts"
+const handler = createStrapiRevalidator({
+  secret: process.env.REVALIDATION_SECRET!,
+  tagMap: {
+    'api::article.article': 'articles',
+  },
+  onRevalidate: (tag) => {
+    // Log to monitoring service
+    console.log({
+      type: 'revalidation',
+      tag,
+      timestamp: new Date().toISOString(),
+    });
+  },
+  onError: (error) => {
+    // Send to error tracking
+    console.error({
+      type: 'revalidation_error',
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    });
+  },
+});
+
+export const POST = handler;
+```
+
+### Rate Limiting
+
+```ts filename="app/api/revalidate/route.ts"
+import { Ratelimit } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
+
+const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(10, '1 m'), // 10 requests per minute
+});
+
+export async function POST(request: NextRequest) {
+  const ip = request.ip || 'unknown';
+  const { success } = await ratelimit.limit(ip);
+  
+  if (!success) {
+    return NextResponse.json(
+      { error: 'Too many requests' },
+      { status: 429 }
+    );
+  }
+
+  // Continue with revalidation...
+}
+```
+
+## Testing
+
+### Manual Test
+
+```bash
+curl -X POST http://localhost:3000/api/revalidate \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-secret" \
+  -d '{
+    "event": "entry.publish",
+    "model": "api::article.article",
+    "entry": { "id": 1, "slug": "test" }
+  }'
+```
+
+**Expected Response**:
+```json
+{
+  "revalidated": true,
+  "tag": "articles"
+}
+```
+
+### Test in Strapi
+
+1. Go to Settings → Webhooks
+2. Find your webhook
+3. Click **Trigger**
+4. Check Next.js logs for revalidation
+
+### Automated Test
+
+```ts filename="e2e/revalidation.spec.ts"
+import { test, expect } from '@playwright/test';
+
+test('revalidation updates content', async ({ page, request }) => {
+  // Visit page
+  await page.goto('/blog');
+  const initialCount = await page.locator('article').count();
+
+  // Trigger revalidation
+  await request.post('http://localhost:3000/api/revalidate', {
+    headers: {
+      'Authorization': `Bearer ${process.env.REVALIDATION_SECRET}`,
+      'Content-Type': 'application/json',
+    },
+    data: {
+      event: 'entry.create',
+      model: 'api::article.article',
+      entry: { slug: 'new-article' },
+    },
+  });
+
+  // Reload page
+  await page.reload();
+  
+  // Verify cache was invalidated
+  const newCount = await page.locator('article').count();
+  expect(newCount).toBeGreaterThanOrEqual(initialCount);
+});
+```
+
+## Security Best Practices
+
+### 1. Use Strong Secrets
+
+```bash
+# ✅ Generate secure secret
+openssl rand -base64 32
+
+# ❌ Don't use weak secrets
+REVALIDATION_SECRET=secret123
+```
+
+### 2. Verify Webhook Source
+
+```ts
+const ALLOWED_IPS = ['strapi-server-ip'];
+
+export async function POST(request: NextRequest) {
+  const ip = request.ip || request.headers.get('x-forwarded-for');
+  
+  if (!ALLOWED_IPS.includes(ip)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  
+  // Continue...
+}
+```
+
+### 3. Use HTTPS
+
+```
+# ✅ Production
+https://your-site.com/api/revalidate
+
+# ❌ Never in production
+http://your-site.com/api/revalidate
+```
+
+### 4. Implement Rate Limiting
+
+Prevent abuse with rate limiting (see Advanced Patterns above).
+
+## Troubleshooting
+
+### Webhook Not Triggering
+
+**Problem**: Content published but cache not revalidated
+
+**Solutions**:
+1. Check webhook is enabled in Strapi
+2. Verify URL is correct (use ngrok for local)
+3. Check Strapi webhook logs
+4. Ensure events are selected
+
+### 401 Unauthorized
+
+**Problem**: Webhook returns 401
+
+**Solutions**:
+1. Check `Authorization` header format: `Bearer YOUR_SECRET`
+2. Verify secret matches in .env and Strapi
+3. Ensure no trailing spaces in secret
+4. Restart Next.js dev server
+
+### Cache Not Invalidating
+
+**Problem**: Webhook succeeds but content doesn't update
+
+**Solutions**:
+1. Verify cache tag matches in `tagMap` and `unstable_cache`
+2. Check production mode: `npm run build && npm start`
+3. Clear .next folder: `rm -rf .next`
+4. Verify using tags, not just time-based revalidation
+
+### Too Many Requests
+
+**Problem**: Rate limit exceeded
+
+**Solutions**:
+1. Filter webhook events (use only `entry.publish`)
+2. Implement debouncing
+3. Increase rate limits
+4. Check for webhook loops
+
+## Environment Variables
+
+```bash filename=".env.local"
+# Required - Must be at least 32 characters
+REVALIDATION_SECRET=your-cryptographically-random-secret-min-32-chars
+
+# Optional - For IP whitelisting
+REVALIDATION_ALLOWED_IPS=192.168.1.1,10.0.0.1
+```
+
+## API Reference Summary
+
+### createStrapiRevalidator
+
+```ts
+function createStrapiRevalidator(config: {
+  secret: string;
+  tagMap?: Record<string, string | string[]>;
+  onRevalidate?: (tag: string) => void;
+  onError?: (error: Error) => void;
+}): (request: NextRequest) => Promise<Response>
+```
+
+### Tag Map Format
+
+```ts
+{
+  // Strapi Model UID → Cache Tag(s)
+  'api::article.article': 'articles',
+  'api::page.page': ['pages', 'content'],
+  'api::global.global': 'global',
+}
+```
+
+## See Also
+
+- [Revalidation Guide](/guides/revalidation-webhook)
+- [Caching Strategy](/concepts/caching-strategy)
+- [createStrapiSDK](/api-reference/create-sdk)
+- [Next.js Revalidation](https://nextjs.org/docs/app/building-your-application/data-fetching/fetching-caching-and-revalidating#on-demand-revalidation)

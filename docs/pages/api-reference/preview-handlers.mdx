@@ -1,0 +1,553 @@
+# Preview Handlers
+
+API route handlers for enabling and disabling Next.js Draft Mode with Strapi preview integration.
+
+## Import
+
+```tsx
+import { 
+  createPreviewHandler, 
+  createExitPreviewHandler 
+} from 'strapi-nextgen-framework';
+```
+
+## createPreviewHandler
+
+Creates a route handler to enable draft mode and redirect to preview content.
+
+### Usage
+
+```ts filename="app/api/preview/route.ts"
+import { createPreviewHandler } from 'strapi-nextgen-framework';
+
+const handler = createPreviewHandler({
+  secret: process.env.PREVIEW_SECRET!,
+});
+
+export const GET = handler;
+```
+
+### Parameters
+
+#### `config` (required)
+
+**Type**: `PreviewHandlerConfig`
+
+Configuration object for the preview handler.
+
+```ts
+interface PreviewHandlerConfig {
+  secret: string;
+  redirectOverride?: (slug: string | null) => string;
+}
+```
+
+### Configuration Options
+
+#### `secret` (required)
+
+**Type**: `string`
+
+Secret key to validate preview requests. Must match the secret configured in Strapi.
+
+```ts
+const handler = createPreviewHandler({
+  secret: process.env.PREVIEW_SECRET!,
+});
+```
+
+**Environment Variable**:
+```bash filename=".env.local"
+PREVIEW_SECRET=your-random-secret-minimum-32-characters
+```
+
+**Generate a secure secret**:
+```bash
+openssl rand -base64 32
+```
+
+**Security**: This should be a strong, random secret at least 32 characters long.
+
+#### `redirectOverride` (optional)
+
+**Type**: `(slug: string | null) => string`
+
+Custom redirect logic after enabling preview mode.
+
+```ts
+const handler = createPreviewHandler({
+  secret: process.env.PREVIEW_SECRET!,
+  redirectOverride: (slug) => {
+    // Custom logic
+    if (slug?.startsWith('/blog/')) {
+      return `/preview${slug}`;
+    }
+    return slug || '/';
+  },
+});
+```
+
+**Default behavior**: Redirects to the slug parameter or '/' if no slug provided.
+
+### Return Value
+
+**Type**: `(request: NextRequest) => Promise<Response>`
+
+A Next.js Route Handler function compatible with App Router.
+
+### Request Format
+
+**URL Structure**:
+```
+/api/preview?secret=YOUR_SECRET&slug=/blog/my-article
+```
+
+**Query Parameters**:
+- `secret` (required) - Must match configured secret
+- `slug` (optional) - Path to redirect to after enabling preview mode
+
+### Response
+
+**Success (200)**:
+- Enables Next.js draft mode
+- Sets `Set-Cookie` header with draft mode cookie
+- Redirects to specified slug
+
+**Unauthorized (401)**:
+- Returns when secret is invalid or missing
+- Response body: `{ message: 'Invalid secret' }`
+
+## createExitPreviewHandler
+
+Creates a route handler to disable draft mode.
+
+### Usage
+
+```ts filename="app/api/exit-preview/route.ts"
+import { createExitPreviewHandler } from 'strapi-nextgen-framework';
+
+const handler = createExitPreviewHandler();
+
+export const GET = handler;
+```
+
+### Parameters
+
+#### `redirectPath` (optional)
+
+**Type**: `string`
+
+Path to redirect to after exiting preview mode. Defaults to `/`.
+
+```ts
+const handler = createExitPreviewHandler('/blog');
+```
+
+### Return Value
+
+**Type**: `(request: NextRequest) => Promise<Response>`
+
+A Next.js Route Handler function.
+
+### Response
+
+**Success (200)**:
+- Disables draft mode
+- Clears draft mode cookie
+- Redirects to specified path
+
+## Complete Setup Example
+
+### 1. Create Preview Route
+
+```ts filename="app/api/preview/route.ts"
+import { createPreviewHandler } from 'strapi-nextgen-framework';
+
+const handler = createPreviewHandler({
+  secret: process.env.PREVIEW_SECRET!,
+});
+
+export const GET = handler;
+```
+
+### 2. Create Exit Preview Route
+
+```ts filename="app/api/exit-preview/route.ts"
+import { createExitPreviewHandler } from 'strapi-nextgen-framework';
+
+const handler = createExitPreviewHandler();
+
+export const GET = handler;
+```
+
+### 3. Add Environment Variable
+
+```bash filename=".env.local"
+PREVIEW_SECRET=generate-a-secure-random-secret-here-32-chars-min
+```
+
+### 4. Configure Strapi
+
+In Strapi Admin → Settings → Preview:
+
+```json
+{
+  "url": "http://localhost:3000/api/preview",
+  "secret": "your-preview-secret"
+}
+```
+
+### 5. Use in Pages
+
+```tsx filename="app/blog/[slug]/page.tsx"
+import { draftMode } from 'next/headers';
+import { strapi } from '@/lib/strapi';
+import { GetArticleDocument } from '@/graphql/generated';
+
+export default async function ArticlePage({ 
+  params 
+}: { 
+  params: { slug: string } 
+}) {
+  const { isEnabled } = draftMode();
+  
+  // SDK automatically uses draft content when enabled
+  const data = await strapi.getCollection('articles', GetArticleDocument, {
+    filters: { slug: { eq: params.slug } },
+  });
+
+  return (
+    <article>
+      {isEnabled && (
+        <div className="preview-banner">
+          🚧 Preview Mode
+          <a href="/api/exit-preview">Exit</a>
+        </div>
+      )}
+      
+      {/* Your content */}
+    </article>
+  );
+}
+```
+
+## How Preview Mode Works
+
+### 1. User Clicks Preview in Strapi
+
+Strapi redirects to:
+```
+http://localhost:3000/api/preview?secret=YOUR_SECRET&slug=/blog/my-draft
+```
+
+### 2. Preview Handler Validates
+
+```ts
+// Handler checks:
+1. Is secret parameter present?
+2. Does it match PREVIEW_SECRET?
+3. If yes → enable draft mode
+4. If no → return 401
+```
+
+### 3. Draft Mode Enabled
+
+```ts
+// Next.js sets cookie:
+__prerender_bypass=RANDOM_VALUE
+
+// SDK detects draft mode and uses:
+publicationState: PREVIEW
+```
+
+### 4. User Redirected
+
+```ts
+// Browser redirects to:
+/blog/my-draft
+
+// Page fetches draft content
+// User sees unpublished content
+```
+
+### 5. User Exits Preview
+
+```ts
+// User clicks "Exit Preview" → /api/exit-preview
+// Cookie cleared
+// Redirected to homepage
+// Normal (published) content shown
+```
+
+## Advanced Patterns
+
+### Custom Redirect Logic
+
+```ts filename="app/api/preview/route.ts"
+const handler = createPreviewHandler({
+  secret: process.env.PREVIEW_SECRET!,
+  redirectOverride: (slug) => {
+    const url = new URL(slug || '/', 'http://localhost:3000');
+    const contentType = url.searchParams.get('type');
+    const id = url.searchParams.get('id');
+    
+    // Route based on content type
+    switch (contentType) {
+      case 'article':
+        return `/blog/${id}`;
+      case 'page':
+        return `/${id}`;
+      case 'product':
+        return `/shop/${id}`;
+      default:
+        return slug || '/';
+    }
+  },
+});
+```
+
+### Preview Banner Component
+
+```tsx filename="components/PreviewBanner.tsx"
+import { draftMode } from 'next/headers';
+
+export async function PreviewBanner() {
+  const { isEnabled } = draftMode();
+  
+  if (!isEnabled) return null;
+  
+  return (
+    <div className="fixed top-0 left-0 right-0 bg-yellow-500 text-white p-3 text-center z-50">
+      <span className="font-semibold">🚧 Preview Mode Active</span>
+      {' - '}
+      <a 
+        href="/api/exit-preview" 
+        className="underline hover:no-underline font-medium"
+      >
+        Exit Preview
+      </a>
+    </div>
+  );
+}
+
+// In layout.tsx:
+<PreviewBanner />
+```
+
+### Logging Preview Activity
+
+```ts filename="app/api/preview/route.ts"
+import { createPreviewHandler } from 'strapi-nextgen-framework';
+
+const baseHandler = createPreviewHandler({
+  secret: process.env.PREVIEW_SECRET!,
+});
+
+export async function GET(request: NextRequest) {
+  const slug = request.nextUrl.searchParams.get('slug');
+  
+  // Log preview access
+  console.log('Preview accessed:', {
+    slug,
+    timestamp: new Date().toISOString(),
+    ip: request.ip,
+  });
+  
+  // Call original handler
+  return baseHandler(request);
+}
+```
+
+### IP Whitelisting (Production)
+
+```ts filename="app/api/preview/route.ts"
+import { NextRequest, NextResponse } from 'next/server';
+import { createPreviewHandler } from 'strapi-nextgen-framework';
+
+const ALLOWED_IPS = process.env.PREVIEW_ALLOWED_IPS?.split(',') || [];
+
+const handler = createPreviewHandler({
+  secret: process.env.PREVIEW_SECRET!,
+});
+
+export async function GET(request: NextRequest) {
+  const ip = request.ip || request.headers.get('x-forwarded-for');
+  
+  if (process.env.NODE_ENV === 'production' && !ALLOWED_IPS.includes(ip)) {
+    return NextResponse.json(
+      { message: 'Forbidden' },
+      { status: 403 }
+    );
+  }
+  
+  return handler(request);
+}
+```
+
+## Security Best Practices
+
+### 1. Use Strong Secrets
+
+```bash
+# ✅ Generate cryptographically secure secret
+openssl rand -base64 32
+
+# ❌ Don't use weak secrets
+PREVIEW_SECRET=preview123
+```
+
+### 2. HTTPS in Production
+
+```
+# ✅ Use HTTPS
+https://your-site.com/api/preview
+
+# ❌ Never use HTTP in production
+http://your-site.com/api/preview
+```
+
+### 3. Environment Variables Only
+
+```ts
+// ✅ Use environment variables
+const secret = process.env.PREVIEW_SECRET!;
+
+// ❌ Never hardcode
+const secret = "my-secret-123";
+```
+
+### 4. Validate Secret Length
+
+```ts
+if (process.env.PREVIEW_SECRET!.length < 32) {
+  throw new Error('PREVIEW_SECRET must be at least 32 characters');
+}
+```
+
+## Testing
+
+### Manual Test
+
+1. **Enable Preview**:
+   ```
+   http://localhost:3000/api/preview?secret=YOUR_SECRET&slug=/test
+   ```
+
+2. **Verify Draft Content**:
+   - Create draft content in Strapi
+   - Should be visible in preview mode
+   - Should be hidden in normal mode
+
+3. **Exit Preview**:
+   ```
+   http://localhost:3000/api/exit-preview
+   ```
+
+4. **Verify Normal Content**:
+   - Draft content should be hidden
+   - Only published content visible
+
+### Automated Test
+
+```ts filename="e2e/preview.spec.ts"
+import { test, expect } from '@playwright/test';
+
+test('preview mode enables draft content', async ({ page }) => {
+  // Enable preview
+  await page.goto('/api/preview?secret=test-secret&slug=/blog/draft');
+  
+  // Verify preview banner
+  await expect(page.locator('text=Preview Mode')).toBeVisible();
+  
+  // Verify draft content
+  await expect(page.locator('h1')).toContainText('Draft Article');
+  
+  // Exit preview
+  await page.click('text=Exit Preview');
+  
+  // Verify redirected to homepage
+  await expect(page).toHaveURL('/');
+  
+  // Verify normal mode
+  await expect(page.locator('text=Preview Mode')).not.toBeVisible();
+});
+```
+
+## Troubleshooting
+
+### Preview Not Working
+
+**Problem**: Clicking preview in Strapi doesn't show draft content
+
+**Solutions**:
+1. Verify `PREVIEW_SECRET` matches in both .env.local and Strapi
+2. Check preview URL in Strapi settings is correct
+3. Ensure secret is at least 32 characters
+4. Test preview URL manually in browser
+5. Check console for errors
+
+### 401 Unauthorized
+
+**Problem**: Preview route returns 401
+
+**Solutions**:
+1. Check secret in URL matches `PREVIEW_SECRET`
+2. Verify no trailing spaces in `.env.local`
+3. Restart Next.js dev server after changing env vars
+4. Ensure Strapi is sending correct secret
+
+### Draft Content Not Showing
+
+**Problem**: Preview mode enabled but still showing published content
+
+**Solutions**:
+1. Verify SDK is used in server component
+2. Check draft mode is enabled: `const { isEnabled } = draftMode()`
+3. Ensure content is actually draft in Strapi
+4. Clear Next.js cache: `rm -rf .next`
+
+### Can't Exit Preview
+
+**Problem**: Exit preview doesn't work
+
+**Solutions**:
+1. Check `/api/exit-preview/route.ts` exists
+2. Try manually: `http://localhost:3000/api/exit-preview`
+3. Clear browser cookies
+4. Check for JavaScript errors
+
+## Environment Variables
+
+```bash filename=".env.local"
+# Required - Must be at least 32 characters
+PREVIEW_SECRET=your-cryptographically-random-secret-here-min-32-chars
+
+# Optional - For IP whitelisting in production
+PREVIEW_ALLOWED_IPS=192.168.1.1,10.0.0.1
+```
+
+## API Reference Summary
+
+### createPreviewHandler
+
+```ts
+function createPreviewHandler(config: {
+  secret: string;
+  redirectOverride?: (slug: string | null) => string;
+}): (request: NextRequest) => Promise<Response>
+```
+
+### createExitPreviewHandler
+
+```ts
+function createExitPreviewHandler(
+  redirectPath?: string
+): (request: NextRequest) => Promise<Response>
+```
+
+## See Also
+
+- [Preview Mode Guide](/guides/preview-mode)
+- [createStrapiSDK](/api-reference/create-sdk)
+- [Next.js Draft Mode](https://nextjs.org/docs/app/building-your-application/configuring/draft-mode)
+- [Strapi Preview](https://docs.strapi.io/user-docs/content-manager/previewing-content)

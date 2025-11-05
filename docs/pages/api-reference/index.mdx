@@ -1,0 +1,84 @@
+# API Reference
+
+Complete API documentation for Strapi-NextGen Framework.
+
+## Core Components
+
+### Presentation Layer
+
+- **[StrapiImage](/api-reference/strapi-image)** - Optimized image component for Strapi media
+- **[StrapiRenderer](/api-reference/strapi-renderer)** - Dynamic component renderer for Strapi content
+
+### Data Layer
+
+- **[createStrapiSDK](/api-reference/create-sdk)** - Initialize the Strapi GraphQL client
+
+### Helpers
+
+- **[generateStrapiMetadata](/api-reference/generate-metadata)** - Generate Next.js metadata from Strapi SEO
+- **[Preview Handlers](/api-reference/preview-handlers)** - Enable/disable Next.js Draft Mode
+- **[Revalidation](/api-reference/revalidation)** - On-demand revalidation webhook handler
+
+## Quick Links
+
+import { Cards, Card } from 'nextra/components'
+
+<Cards>
+  <Card title="StrapiImage →" href="/api-reference/strapi-image" />
+  <Card title="generateStrapiMetadata →" href="/api-reference/generate-metadata" />
+  <Card title="createStrapiSDK →" href="/api-reference/create-sdk" />
+  <Card title="StrapiRenderer →" href="/api-reference/strapi-renderer" />
+</Cards>
+
+## Type Definitions
+
+All types are automatically generated from your GraphQL schema using GraphQL Code Generator.
+
+The framework also provides utility types:
+
+```ts
+import type {
+  StrapiMedia,
+  StrapiSEO,
+  StrapiSDKConfig,
+  StrapiRendererProps,
+} from 'strapi-nextgen-framework';
+```
+
+## Common Patterns
+
+### Fetching Data
+
+```ts
+import { strapi } from '@/lib/strapi';
+import { GetPageDocument } from '@/graphql/generated';
+
+const data = await strapi.getPage('home', GetPageDocument);
+```
+
+### Rendering Images
+
+```tsx
+import { StrapiImage } from 'strapi-nextgen-framework';
+
+<StrapiImage
+  data={imageData}
+  nextImageProps={{ priority: true }}
+/>
+```
+
+### Generating Metadata
+
+```ts
+import { generateStrapiMetadata } from 'strapi-nextgen-framework';
+
+export async function generateMetadata() {
+  return generateStrapiMetadata(seoData);
+}
+```
+
+## Need Help?
+
+- 📖 [Guides](/guides) - Step-by-step how-to guides
+- 💡 [Concepts](/concepts) - Understand the framework's design
+- 🐛 [GitHub Issues](https://github.com/DDevFurkanPasa/NextGen/issues)

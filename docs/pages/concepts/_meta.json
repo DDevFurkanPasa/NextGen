@@ -1,0 +1,8 @@
+{
+  "index": "Overview",
+  "graphql-vs-rest": "Why GraphQL over REST?",
+  "caching-strategy": "Caching Strategy",
+  "testing-philosophy": "Testing Philosophy",
+  "architecture": "Framework Architecture",
+  "type-safety": "Type Safety Approach"
+}

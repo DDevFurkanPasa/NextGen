@@ -1,0 +1,386 @@
+# generateStrapiMetadata
+
+Generate Next.js metadata from Strapi SEO data for optimal SEO performance.
+
+## Import
+
+```tsx
+import { generateStrapiMetadata } from 'strapi-nextgen-framework';
+```
+
+## Usage
+
+```tsx
+import { generateStrapiMetadata } from 'strapi-nextgen-framework';
+
+export async function generateMetadata() {
+  const data = await strapi.getPage('home', GetPageDocument);
+  const seo = data.page?.data?.attributes?.seo;
+  
+  return generateStrapiMetadata(seo);
+}
+```
+
+## Parameters
+
+### `seo` (required)
+
+**Type**: `StrapiSEO | null | undefined`
+
+The SEO data from Strapi. Typically extracted from your page/content type.
+
+```ts
+type StrapiSEO = {
+  metaTitle?: string | null;
+  metaDescription?: string | null;
+  keywords?: string | null;
+  canonicalURL?: string | null;
+  metaRobots?: string | null;
+  metaImage?: StrapiMedia | null;
+  metaSocial?: Array<{
+    socialNetwork: 'Facebook' | 'Twitter';
+    title?: string | null;
+    description?: string | null;
+    image?: StrapiMedia | null;
+  }> | null;
+  structuredData?: any | null;
+};
+```
+
+### `defaultMetadata` (optional)
+
+**Type**: `Metadata`
+
+Default metadata to merge with Strapi SEO. Useful for site-wide defaults.
+
+```tsx
+generateStrapiMetadata(seo, {
+  metadataBase: new URL('https://example.com'),
+  applicationName: 'My App',
+});
+```
+
+## Return Value
+
+**Type**: `Metadata`
+
+Returns a Next.js `Metadata` object compatible with App Router's `generateMetadata` function.
+
+## Generated Fields
+
+The function generates the following metadata fields:
+
+### Basic SEO
+
+| Strapi Field | Next.js Field | Description |
+|--------------|---------------|-------------|
+| `metaTitle` | `title` | Page title |
+| `metaDescription` | `description` | Meta description |
+| `keywords` | `keywords` | SEO keywords |
+| `canonicalURL` | `alternates.canonical` | Canonical URL |
+| `metaRobots` | `robots` | Robots directives |
+
+### Open Graph (Facebook)
+
+| Strapi Field | Next.js Field | Description |
+|--------------|---------------|-------------|
+| `metaSocial[0].title` | `openGraph.title` | OG title |
+| `metaSocial[0].description` | `openGraph.description` | OG description |
+| `metaSocial[0].image` | `openGraph.images` | OG image |
+| - | `openGraph.type` | Always 'website' |
+
+### Twitter Cards
+
+| Strapi Field | Next.js Field | Description |
+|--------------|---------------|-------------|
+| `metaSocial[1].title` | `twitter.title` | Twitter title |
+| `metaSocial[1].description` | `twitter.description` | Twitter description |
+| `metaSocial[1].image` | `twitter.images` | Twitter image |
+| - | `twitter.card` | Always 'summary_large_image' |
+
+### Structured Data
+
+| Strapi Field | Generated Output | Description |
+|--------------|------------------|-------------|
+| `structuredData` | `<script type="application/ld+json">` | JSON-LD for rich snippets |
+
+## Examples
+
+### Basic Page Metadata
+
+```tsx filename="app/about/page.tsx"
+import { generateStrapiMetadata } from 'strapi-nextgen-framework';
+import { strapi } from '@/lib/strapi';
+import { GetAboutPageDocument } from '@/graphql/generated';
+
+export async function generateMetadata() {
+  const data = await strapi.getPage('about', GetAboutPageDocument);
+  const seo = data.page?.data?.attributes?.seo;
+  
+  return generateStrapiMetadata(seo);
+}
+
+export default function AboutPage() {
+  // ... page content
+}
+```
+
+### With Default Metadata
+
+```tsx
+export async function generateMetadata() {
+  const data = await strapi.getPage('blog', GetBlogPageDocument);
+  const seo = data.page?.data?.attributes?.seo;
+  
+  return generateStrapiMetadata(seo, {
+    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL!),
+    applicationName: 'My Blog',
+    authors: [{ name: 'John Doe' }],
+  });
+}
+```
+
+### Dynamic Routes
+
+```tsx filename="app/blog/[slug]/page.tsx"
+export async function generateMetadata({ params }: { params: { slug: string } }) {
+  const data = await strapi.getCollection('articles', GetArticleDocument, {
+    filters: { slug: { eq: params.slug } },
+  });
+  
+  const article = data.articles?.data[0]?.attributes;
+  const seo = article?.seo;
+  
+  return generateStrapiMetadata(seo, {
+    openGraph: {
+      type: 'article',
+      publishedTime: article?.publishedAt,
+      authors: [article?.author?.data?.attributes?.name],
+    },
+  });
+}
+```
+
+### Fallback for Missing SEO
+
+```tsx
+export async function generateMetadata() {
+  const data = await strapi.getPage('home', GetHomePageDocument);
+  const page = data.page?.data?.attributes;
+  const seo = page?.seo;
+  
+  // If SEO is missing, use page data as fallback
+  return generateStrapiMetadata(seo, {
+    title: page?.title || 'Home',
+    description: page?.description || 'Welcome to our site',
+  });
+}
+```
+
+## Strapi SEO Component Setup
+
+To use this function, you need the SEO component in Strapi:
+
+### 1. Install Strapi SEO Plugin (Recommended)
+
+```bash
+npm install @strapi/plugin-seo
+```
+
+### 2. Or Create Custom SEO Component
+
+Create a component in Strapi with these fields:
+
+```json
+{
+  "collectionName": "components_shared_seos",
+  "info": {
+    "displayName": "SEO",
+    "description": "SEO meta tags"
+  },
+  "attributes": {
+    "metaTitle": { "type": "string" },
+    "metaDescription": { "type": "text" },
+    "keywords": { "type": "string" },
+    "canonicalURL": { "type": "string" },
+    "metaRobots": { "type": "string" },
+    "metaImage": {
+      "type": "media",
+      "allowedTypes": ["images"]
+    },
+    "metaSocial": {
+      "type": "component",
+      "repeatable": true,
+      "component": "shared.meta-social"
+    },
+    "structuredData": { "type": "json" }
+  }
+}
+```
+
+### 3. GraphQL Query
+
+Include SEO in your queries:
+
+```graphql
+query GetPage($slug: String!) {
+  pages(filters: { slug: { eq: $slug } }) {
+    data {
+      attributes {
+        title
+        seo {
+          metaTitle
+          metaDescription
+          keywords
+          canonicalURL
+          metaRobots
+          metaImage {
+            data {
+              attributes {
+                url
+              }
+            }
+          }
+          metaSocial {
+            socialNetwork
+            title
+            description
+            image {
+              data {
+                attributes {
+                  url
+                }
+              }
+            }
+          }
+          structuredData
+        }
+      }
+    }
+  }
+}
+```
+
+## Generated Output Example
+
+Given this Strapi SEO data:
+
+```json
+{
+  "metaTitle": "About Us - My Company",
+  "metaDescription": "Learn about our mission and team",
+  "keywords": "about, company, team",
+  "canonicalURL": "https://example.com/about",
+  "metaSocial": [
+    {
+      "socialNetwork": "Facebook",
+      "title": "About My Company",
+      "description": "Discover our story"
+    }
+  ]
+}
+```
+
+The function generates:
+
+```tsx
+{
+  title: "About Us - My Company",
+  description: "Learn about our mission and team",
+  keywords: ["about", "company", "team"],
+  alternates: {
+    canonical: "https://example.com/about"
+  },
+  openGraph: {
+    title: "About My Company",
+    description: "Discover our story",
+    type: "website"
+  },
+  twitter: {
+    card: "summary_large_image"
+  }
+}
+```
+
+## Behavior
+
+### Null Handling
+
+- ✅ Returns empty object `{}` if `seo` is `null` or `undefined`
+- ✅ Merges with `defaultMetadata` if provided
+- ✅ Skips undefined/null fields
+
+### Keywords Processing
+
+- ✅ Splits comma-separated strings into arrays
+- ✅ Trims whitespace from each keyword
+- ✅ Handles both string and array inputs
+
+### Social Media Fallbacks
+
+- ✅ Falls back to basic SEO if social metadata missing
+- ✅ Uses `metaImage` if social image not specified
+- ✅ Defaults to appropriate card types (summary_large_image)
+
+### Structured Data
+
+- ✅ Automatically injects JSON-LD script into `<head>`
+- ✅ Validates JSON before injection
+- ✅ Logs errors in development mode
+
+## TypeScript
+
+Fully typed with TypeScript:
+
+```tsx
+import type { Metadata } from 'next';
+import type { StrapiSEO } from 'strapi-nextgen-framework';
+
+const seo: StrapiSEO = {
+  metaTitle: 'My Page',
+  metaDescription: 'Page description',
+};
+
+const metadata: Metadata = generateStrapiMetadata(seo);
+```
+
+## Common Issues
+
+### Metadata Not Appearing
+
+**Problem**: SEO tags don't appear in page source
+
+**Solutions**:
+1. Ensure `generateMetadata` is exported from page component
+2. Check that SEO data exists in Strapi
+3. Verify GraphQL query includes `seo` field
+4. Check browser's View Source (not DevTools)
+
+### Images Not in Social Previews
+
+**Problem**: Social media doesn't show image previews
+
+**Solutions**:
+1. Add full URL to images:
+   ```tsx
+   metadataBase: new URL('https://example.com')
+   ```
+2. Verify image URL is absolute
+3. Check image meets platform requirements (min 1200x630px for Facebook)
+4. Test with [Facebook Debugger](https://developers.facebook.com/tools/debug/)
+
+### Structured Data Errors
+
+**Problem**: Google Search Console shows structured data errors
+
+**Solutions**:
+1. Validate JSON-LD with [Schema.org Validator](https://validator.schema.org/)
+2. Check `structuredData` field in Strapi is valid JSON
+3. Use [Rich Results Test](https://search.google.com/test/rich-results)
+
+## See Also
+
+- [Next.js Metadata API](https://nextjs.org/docs/app/api-reference/functions/generate-metadata)
+- [Strapi SEO Plugin](https://market.strapi.io/plugins/@strapi-plugin-seo)
+- [Schema.org](https://schema.org/)
+- [Open Graph Protocol](https://ogp.me/)

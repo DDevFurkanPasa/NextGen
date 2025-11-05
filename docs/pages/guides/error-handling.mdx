@@ -1,0 +1,672 @@
+# Error Handling
+
+Implement robust error handling to prevent crashes and provide excellent user experience.
+
+## Overview
+
+Strapi-NextGen Framework provides multiple layers of error handling:
+
+- ✅ **Error Boundaries** - Catch React component errors
+- ✅ **Graceful Degradation** - Components fail safely
+- ✅ **Validation** - Zod schema validation
+- ✅ **Null Safety** - TypeScript optional chaining
+- ✅ **Logging** - Development error details
+
+## Error Handling Layers
+
+### 1. Network Errors (Data Layer)
+
+Handle Strapi connection issues:
+
+```tsx filename="app/page.tsx"
+import { strapi } from '@/lib/strapi';
+import { GetPageDocument } from '@/graphql/generated';
+
+export default async function Page() {
+  try {
+    const data = await strapi.getPage('home', GetPageDocument);
+    const page = data.page?.data?.attributes;
+
+    if (!page) {
+      return (
+        <div className="container mx-auto px-4 py-16">
+          <h1>Page not found</h1>
+          <p>The page you're looking for doesn't exist.</p>
+        </div>
+      );
+    }
+
+    return (
+      <main>
+        <h1>{page.title}</h1>
+        {/* Your content */}
+      </main>
+    );
+  } catch (error) {
+    console.error('Failed to fetch page:', error);
+    
+    return (
+      <div className="container mx-auto px-4 py-16">
+        <h1>Something went wrong</h1>
+        <p>We're having trouble loading this page. Please try again later.</p>
+      </div>
+    );
+  }
+}
+```
+
+### 2. Component Errors (Presentation Layer)
+
+Use built-in error boundaries:
+
+```tsx
+import { StrapiRenderer } from 'strapi-nextgen-framework';
+
+<StrapiRenderer
+  sections={page.sections}
+  componentMap={componentMap}
+  fallback={(typename) => (
+    <div className="error-fallback">
+      <p>Unable to render section: {typename}</p>
+    </div>
+  )}
+/>
+```
+
+**Behavior**:
+- Each component is wrapped in an error boundary
+- If one component crashes, others continue rendering
+- Development shows detailed error
+- Production shows fallback UI
+
+### 3. Data Validation
+
+Validate data with Zod:
+
+```tsx filename="lib/validators.ts"
+import { z } from 'zod';
+
+export const ArticleSchema = z.object({
+  title: z.string().min(1, 'Title is required'),
+  content: z.string().min(10, 'Content must be at least 10 characters'),
+  publishedAt: z.string().datetime().optional(),
+  author: z.object({
+    name: z.string(),
+  }).optional(),
+});
+
+export function validateArticle(data: unknown) {
+  const result = ArticleSchema.safeParse(data);
+  
+  if (!result.success) {
+    console.error('Validation errors:', result.error.errors);
+    return null;
+  }
+  
+  return result.data;
+}
+```
+
+```tsx filename="app/blog/[slug]/page.tsx"
+import { validateArticle } from '@/lib/validators';
+
+export default async function Page({ params }: { params: { slug: string } }) {
+  const data = await strapi.getCollection('articles', GetArticlesDocument, {
+    filters: { slug: { eq: params.slug } },
+  });
+
+  const article = data.articles?.data[0]?.attributes;
+  const validated = validateArticle(article);
+
+  if (!validated) {
+    return <div>Invalid article data</div>;
+  }
+
+  return (
+    <article>
+      <h1>{validated.title}</h1>
+      <div>{validated.content}</div>
+    </article>
+  );
+}
+```
+
+## Built-in Error Boundaries
+
+### StrapiRenderer Error Boundary
+
+Automatic for dynamic sections:
+
+```tsx
+import { StrapiRenderer } from 'strapi-nextgen-framework';
+
+<StrapiRenderer
+  sections={sections}
+  componentMap={componentMap}
+  fallback={(typename, error) => {
+    // Log to error service
+    console.error('Section error:', typename, error);
+    
+    // Return user-friendly UI
+    return (
+      <div className="section-error">
+        <p>This section is temporarily unavailable.</p>
+      </div>
+    );
+  }}
+/>
+```
+
+### Custom Error Boundary
+
+For specific components:
+
+```tsx filename="components/ErrorBoundary.tsx"
+'use client';
+
+import { Component, ReactNode } from 'react';
+
+interface Props {
+  children: ReactNode;
+  fallback?: ReactNode;
+}
+
+interface State {
+  hasError: boolean;
+  error?: Error;
+}
+
+export class ErrorBoundary extends Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Error caught by boundary:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback || (
+        <div className="error-boundary">
+          <h2>Something went wrong</h2>
+          <details>
+            <summary>Error details</summary>
+            <pre>{this.state.error?.message}</pre>
+          </details>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+```
+
+**Usage**:
+```tsx
+<ErrorBoundary fallback={<ErrorMessage />}>
+  <ComplexComponent data={data} />
+</ErrorBoundary>
+```
+
+## Error Pages
+
+### Not Found (404)
+
+```tsx filename="app/blog/[slug]/not-found.tsx"
+export default function NotFound() {
+  return (
+    <div className="container mx-auto px-4 py-16 text-center">
+      <h1 className="text-4xl font-bold mb-4">404 - Article Not Found</h1>
+      <p className="text-gray-600 mb-8">
+        The article you're looking for doesn't exist.
+      </p>
+      <a href="/blog" className="btn btn-primary">
+        Back to Blog
+      </a>
+    </div>
+  );
+}
+```
+
+```tsx filename="app/blog/[slug]/page.tsx"
+import { notFound } from 'next/navigation';
+
+export default async function Page({ params }: { params: { slug: string } }) {
+  const data = await strapi.getCollection('articles', GetArticlesDocument, {
+    filters: { slug: { eq: params.slug } },
+  });
+
+  if (!data.articles?.data[0]) {
+    notFound(); // Shows not-found.tsx
+  }
+
+  // Render article...
+}
+```
+
+### Error Page (500)
+
+```tsx filename="app/blog/[slug]/error.tsx"
+'use client';
+
+export default function Error({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  return (
+    <div className="container mx-auto px-4 py-16">
+      <h1 className="text-4xl font-bold mb-4">Something went wrong!</h1>
+      <p className="text-gray-600 mb-8">
+        We encountered an error while loading this article.
+      </p>
+      
+      {process.env.NODE_ENV === 'development' && (
+        <details className="mb-8">
+          <summary>Error details (development only)</summary>
+          <pre className="bg-red-50 p-4 rounded overflow-auto">
+            {error.message}
+          </pre>
+        </details>
+      )}
+      
+      <button onClick={reset} className="btn btn-primary">
+        Try again
+      </button>
+    </div>
+  );
+}
+```
+
+### Global Error
+
+```tsx filename="app/global-error.tsx"
+'use client';
+
+export default function GlobalError({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  return (
+    <html>
+      <body>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-6xl font-bold mb-4">Oops!</h1>
+            <p className="text-xl mb-8">Something went wrong</p>
+            <button onClick={reset} className="btn btn-primary">
+              Reload page
+            </button>
+          </div>
+        </div>
+      </body>
+    </html>
+  );
+}
+```
+
+## Null Safety Patterns
+
+### Optional Chaining
+
+```tsx
+// ✅ Safe: Won't crash if any value is null/undefined
+const authorName = data.articles?.data[0]?.attributes?.author?.data?.attributes?.name;
+
+// ❌ Unsafe: Will crash if any intermediate value is null
+const authorName = data.articles.data[0].attributes.author.data.attributes.name;
+```
+
+### Nullish Coalescing
+
+```tsx
+// ✅ Provide fallback for null/undefined
+const title = article?.title ?? 'Untitled';
+const description = article?.description ?? 'No description available';
+
+// ❌ Empty string is falsy but valid
+const title = article?.title || 'Untitled'; // Wrong if title is ""
+```
+
+### Type Guards
+
+```tsx
+function hasImage(article: Article): article is Article & { image: NonNullable<Article['image']> } {
+  return article.image?.data?.attributes?.url != null;
+}
+
+if (hasImage(article)) {
+  // TypeScript knows article.image exists
+  return <StrapiImage data={article.image.data.attributes} />;
+}
+```
+
+## Error Logging
+
+### Development Logging
+
+```tsx filename="lib/strapi.ts"
+import { createStrapiSDK } from 'strapi-nextgen-framework';
+
+export const strapi = createStrapiSDK({
+  url: process.env.NEXT_PUBLIC_STRAPI_GRAPHQL_URL!,
+  logging: {
+    queries: process.env.NODE_ENV === 'development',
+    errors: true, // Always log errors
+  },
+});
+```
+
+### Production Error Tracking
+
+```tsx filename="lib/error-tracking.ts"
+export function logError(error: Error, context?: Record<string, any>) {
+  if (process.env.NODE_ENV === 'production') {
+    // Send to error tracking service
+    // Example: Sentry, Rollbar, etc.
+    console.error('Error:', error, context);
+  } else {
+    console.error('Error:', error, context);
+  }
+}
+```
+
+```tsx filename="app/page.tsx"
+import { logError } from '@/lib/error-tracking';
+
+try {
+  const data = await strapi.getPage('home', GetPageDocument);
+} catch (error) {
+  logError(error as Error, {
+    page: 'home',
+    component: 'HomePage',
+  });
+  
+  // Show error UI
+}
+```
+
+### Sentry Integration
+
+```tsx filename="app/error.tsx"
+'use client';
+
+import * as Sentry from '@sentry/nextjs';
+import { useEffect } from 'react';
+
+export default function Error({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  useEffect(() => {
+    Sentry.captureException(error);
+  }, [error]);
+
+  return (
+    <div>
+      <h2>Something went wrong!</h2>
+      <button onClick={reset}>Try again</button>
+    </div>
+  );
+}
+```
+
+## Graceful Degradation
+
+### Image Loading Errors
+
+```tsx
+import { StrapiImage } from 'strapi-nextgen-framework';
+
+export function ArticleCard({ article }) {
+  return (
+    <div className="article-card">
+      <StrapiImage
+        data={article.image?.data?.attributes}
+        nextImageProps={{
+          alt: article.title,
+          onError: (e) => {
+            // Hide broken image
+            e.currentTarget.style.display = 'none';
+          },
+        }}
+      />
+      
+      {/* Fallback if no image */}
+      {!article.image && (
+        <div className="placeholder-image bg-gray-200 h-48" />
+      )}
+    </div>
+  );
+}
+```
+
+### Missing Content
+
+```tsx
+export function ArticlePage({ article }) {
+  return (
+    <article>
+      <h1>{article.title || 'Untitled Article'}</h1>
+      
+      {article.content ? (
+        <div dangerouslySetInnerHTML={{ __html: article.content }} />
+      ) : (
+        <p className="text-gray-500 italic">No content available</p>
+      )}
+      
+      {article.author?.data?.attributes ? (
+        <p>By {article.author.data.attributes.name}</p>
+      ) : (
+        <p>By Unknown Author</p>
+      )}
+    </article>
+  );
+}
+```
+
+### API Errors with Retry
+
+```tsx
+async function fetchWithRetry<T>(
+  fn: () => Promise<T>,
+  retries = 3,
+  delay = 1000
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (retries > 0) {
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return fetchWithRetry(fn, retries - 1, delay * 2);
+    }
+    throw error;
+  }
+}
+
+// Usage
+const data = await fetchWithRetry(() =>
+  strapi.getPage('home', GetPageDocument)
+);
+```
+
+## Testing Error Scenarios
+
+### Unit Tests
+
+```tsx
+import { render, screen } from '@testing-library/react';
+import { StrapiImage } from 'strapi-nextgen-framework';
+
+test('handles null image data gracefully', () => {
+  const { container } = render(<StrapiImage data={null} />);
+  
+  // Should return null, not crash
+  expect(container.firstChild).toBeNull();
+});
+
+test('shows fallback for missing content', () => {
+  render(<ArticlePage article={{ title: 'Test' }} />);
+  
+  expect(screen.getByText('No content available')).toBeInTheDocument();
+});
+```
+
+### E2E Tests
+
+```ts
+import { test, expect } from '@playwright/test';
+
+test('shows 404 for non-existent article', async ({ page }) => {
+  const response = await page.goto('/blog/non-existent-article');
+  
+  expect(response?.status()).toBe(404);
+  await expect(page.locator('h1')).toContainText('404');
+});
+
+test('recovers from API error', async ({ page }) => {
+  // Mock API error
+  await page.route('**/graphql', route => {
+    route.abort('failed');
+  });
+  
+  await page.goto('/');
+  
+  // Should show error message, not crash
+  await expect(page.locator('text=Something went wrong')).toBeVisible();
+});
+```
+
+## Best Practices
+
+### 1. Fail Gracefully
+
+```tsx
+// ✅ Good: Graceful degradation
+if (!article) {
+  return <NotFoundPage />;
+}
+
+// ❌ Bad: Crashes entire page
+const title = article.title; // Error if article is null
+```
+
+### 2. Always Provide Fallbacks
+
+```tsx
+// ✅ Good: Always has fallback
+<StrapiRenderer
+  sections={sections}
+  componentMap={componentMap}
+  fallback={<DefaultSection />}
+/>
+
+// ⚠️ Risky: No fallback
+<StrapiRenderer
+  sections={sections}
+  componentMap={componentMap}
+/>
+```
+
+### 3. Log Errors in Production
+
+```tsx
+// ✅ Good: Track errors
+try {
+  await fetchData();
+} catch (error) {
+  logError(error); // Send to monitoring service
+  return <ErrorUI />;
+}
+
+// ❌ Bad: Silent failures
+try {
+  await fetchData();
+} catch (error) {
+  // Nothing - users and developers don't know
+}
+```
+
+### 4. Show User-Friendly Messages
+
+```tsx
+// ✅ Good: User-friendly
+<p>We're having trouble loading this content. Please try again.</p>
+
+// ❌ Bad: Technical jargon
+<p>GraphQL query failed: Network error at line 42</p>
+```
+
+## Error Handling Checklist
+
+- [ ] Network errors caught and handled
+- [ ] Error boundaries wrap risky components
+- [ ] 404 page exists
+- [ ] Error page exists
+- [ ] Null checks on all optional data
+- [ ] Fallback UI for missing content
+- [ ] Errors logged to monitoring service
+- [ ] User-friendly error messages
+- [ ] Error recovery (retry buttons)
+- [ ] Tested error scenarios
+
+## Common Error Scenarios
+
+### 1. Strapi Offline
+
+**Error**: `Failed to fetch`
+
+**Handling**:
+```tsx
+try {
+  const data = await strapi.getPage('home', GetPageDocument);
+} catch (error) {
+  if (error instanceof TypeError && error.message.includes('fetch')) {
+    return <OfflineMessage />;
+  }
+  throw error;
+}
+```
+
+### 2. Invalid GraphQL Query
+
+**Error**: `GraphQL Error: Cannot query field`
+
+**Handling**:
+1. Check query matches Strapi schema
+2. Run `npm run codegen`
+3. Test query in GraphQL Playground
+
+### 3. Missing Required Field
+
+**Error**: `TypeError: Cannot read property 'title' of undefined`
+
+**Handling**:
+```tsx
+// ✅ Safe
+const title = article?.title ?? 'Untitled';
+
+// ❌ Unsafe
+const title = article.title;
+```
+
+## See Also
+
+- [StrapiRenderer API](/api-reference/strapi-renderer)
+- [Testing Philosophy](/concepts/testing-philosophy)
+- [Next.js Error Handling](https://nextjs.org/docs/app/building-your-application/routing/error-handling)

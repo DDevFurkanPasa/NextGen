@@ -1,0 +1,277 @@
+# Concepts
+
+Deep dive into the technical decisions, architecture, and philosophy behind Strapi-NextGen Framework.
+
+## What Are Concepts?
+
+Concepts pages explain the **why** and **how** of the framework's design. Unlike tutorials (which show you what to do) or API reference (which documents what exists), concepts explain:
+
+- 🎯 **Why** we made certain technical decisions
+- 🏗️ **How** the framework's systems work internally
+- 💡 **What** problems we're solving
+- 🔬 **When** to use specific patterns
+
+## Core Concepts
+
+import { Cards, Card } from 'nextra/components'
+
+<Cards>
+  <Card title="Why GraphQL Over REST? →" href="/concepts/graphql-vs-rest" />
+  <Card title="Caching Strategy →" href="/concepts/caching-strategy" />
+  <Card title="Testing Philosophy →" href="/concepts/testing-philosophy" />
+  <Card title="Framework Architecture →" href="/concepts/architecture" />
+  <Card title="Type Safety Approach →" href="/concepts/type-safety" />
+</Cards>
+
+## Key Principles
+
+### 1. Developer Experience First
+
+Every decision prioritizes developer productivity:
+
+- ✅ **Automatic type generation** - No manual type definitions
+- ✅ **Intelligent caching** - No manual cache management
+- ✅ **Error boundaries** - No page crashes
+- ✅ **Hot reload** - Instant feedback
+
+### 2. Production-Ready Quality
+
+Built for real-world production use:
+
+- ✅ **96.59% test coverage** - Comprehensive testing
+- ✅ **100/100 Lighthouse** - Perfect performance
+- ✅ **WCAG 2.1 AA** - Accessibility compliant
+- ✅ **CI/CD automated** - Quality gates enforced
+
+### 3. Type Safety Without Compromise
+
+TypeScript throughout the stack:
+
+- ✅ **GraphQL → TypeScript** - Automatic code generation
+- ✅ **Strapi → TypeScript** - End-to-end type safety
+- ✅ **Runtime validation** - Zod schema validation
+- ✅ **Compile-time checks** - Catch errors early
+
+### 4. Performance by Default
+
+Optimizations built-in:
+
+- ✅ **ISR caching** - Automatic incremental regeneration
+- ✅ **Cache tagging** - Granular invalidation
+- ✅ **Image optimization** - Next.js Image component
+- ✅ **Code splitting** - Automatic lazy loading
+
+## Framework Philosophy
+
+### Convention Over Configuration
+
+```ts
+// ❌ Other frameworks: Manual configuration
+const client = new GraphQLClient({
+  url: 'http://...',
+  cache: { ... },
+  tags: { ... },
+  revalidate: { ... },
+  // 50 more options...
+});
+
+// ✅ Strapi-NextGen: Smart defaults
+const strapi = createStrapiSDK({
+  url: process.env.NEXT_PUBLIC_STRAPI_GRAPHQL_URL!,
+  // Everything else is automatic
+});
+```
+
+### Progressive Enhancement
+
+Start simple, add complexity when needed:
+
+```ts
+// Level 1: Basic usage
+const data = await strapi.getPage('home', GetHomePageDocument);
+
+// Level 2: Add caching
+const data = await unstable_cache(
+  () => strapi.getPage('home', GetHomePageDocument),
+  ['home'],
+  { tags: ['pages'] }
+)();
+
+// Level 3: Full control
+const data = await strapi.rawQuery(CustomQueryDocument, customVariables);
+```
+
+### Fail-Safe Defaults
+
+Errors should never crash the user experience:
+
+```tsx
+// Component errors caught by error boundaries
+<ComponentErrorBoundary>
+  <DynamicSection {...props} />
+</ComponentErrorBoundary>
+
+// Missing data returns null gracefully
+<StrapiImage data={null} /> // Returns null, doesn't crash
+
+// Invalid metadata returns empty object
+generateStrapiMetadata(null) // Returns {}, doesn't throw
+```
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────┐
+│              Next.js App Router (RSC)               │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  ┌──────────────────┐      ┌──────────────────┐   │
+│  │  Data Layer      │      │ Presentation      │   │
+│  │  (SDK)           │      │ Layer             │   │
+│  │                  │      │ (Components)      │   │
+│  │  • GraphQL       │◄────►│ • StrapiImage     │   │
+│  │  • Cache Tags    │      │ • StrapiRenderer  │   │
+│  │  • Type Gen      │      │ • Error Bounds    │   │
+│  └──────────────────┘      └──────────────────┘   │
+│           ▲                         ▲              │
+│           │                         │              │
+│           ▼                         ▼              │
+│  ┌──────────────────┐      ┌──────────────────┐   │
+│  │  Helpers         │      │  Utilities        │   │
+│  │                  │      │                   │   │
+│  │  • Metadata      │      │  • Validation     │   │
+│  │  • Preview       │      │  • Cache Utils    │   │
+│  │  • Revalidation  │      │  • Type Guards    │   │
+│  └──────────────────┘      └──────────────────┘   │
+└─────────────────────────────────────────────────────┘
+                       ▲
+                       │
+                       ▼
+        ┌──────────────────────────────┐
+        │     Strapi v4 CMS            │
+        │     (GraphQL API)            │
+        └──────────────────────────────┘
+```
+
+## Quality Metrics
+
+The framework maintains production-grade quality:
+
+| Metric | Target | Actual | Status |
+|--------|--------|--------|--------|
+| **Code Coverage** | 80% | 96.59% | ✅ Exceeded |
+| **Test Count** | 150+ | 220 | ✅ Exceeded |
+| **Lighthouse Performance** | 90+ | 100 | ✅ Perfect |
+| **Accessibility** | WCAG AA | WCAG AA | ✅ Compliant |
+| **TypeScript** | Strict | Strict | ✅ Enforced |
+
+## Design Decisions
+
+### Why GraphQL?
+
+**Problem**: Strapi's REST API requires complex `populate` queries.
+
+**Solution**: GraphQL provides declarative data fetching with automatic type generation.
+
+[Read more →](/concepts/graphql-vs-rest)
+
+### Why Automatic Caching?
+
+**Problem**: Manual cache management is error-prone and tedious.
+
+**Solution**: Automatic cache tag generation with ISR and on-demand revalidation.
+
+[Read more →](/concepts/caching-strategy)
+
+### Why 96% Coverage?
+
+**Problem**: Frameworks need production-grade reliability.
+
+**Solution**: Comprehensive testing with focus on real-world scenarios.
+
+[Read more →](/concepts/testing-philosophy)
+
+### Why Two-Layer Architecture?
+
+**Problem**: Mixing data fetching and presentation logic causes tight coupling.
+
+**Solution**: Separate data layer (SDK) from presentation layer (components).
+
+[Read more →](/concepts/architecture)
+
+### Why Type Generation?
+
+**Problem**: Manual TypeScript definitions get out of sync.
+
+**Solution**: Automatic type generation from GraphQL schema.
+
+[Read more →](/concepts/type-safety)
+
+## Framework Guarantees
+
+What you can always count on:
+
+### 1. No Breaking Changes in Minor Versions
+
+We follow semantic versioning strictly:
+- **Patch** (0.1.x): Bug fixes only
+- **Minor** (0.x.0): New features, backwards compatible
+- **Major** (x.0.0): Breaking changes (with migration guide)
+
+### 2. Full TypeScript Support
+
+All APIs are fully typed:
+- No `any` types in public API
+- Strict mode compatible
+- Full IntelliSense support
+
+### 3. Production-Ready Defaults
+
+All defaults are safe for production:
+- Secure by default (no exposed secrets)
+- Performant by default (automatic caching)
+- Accessible by default (WCAG AA)
+
+### 4. Documented Behavior
+
+Every feature is documented:
+- API reference for all functions
+- Guides for common patterns
+- Examples for edge cases
+
+## Learn the Concepts
+
+### Start Here
+
+New to the framework? Start with these:
+
+1. [Why GraphQL over REST?](/concepts/graphql-vs-rest) - Understand the data layer
+2. [Framework Architecture](/concepts/architecture) - See the big picture
+3. [Type Safety Approach](/concepts/type-safety) - Learn about automatic types
+
+### Go Deeper
+
+Want to understand the internals?
+
+1. [Caching Strategy](/concepts/caching-strategy) - Multi-layer caching system
+2. [Testing Philosophy](/concepts/testing-philosophy) - 96% coverage approach
+
+## Next Steps
+
+After understanding the concepts:
+
+- 📖 [Quick Start Tutorial](/tutorials/quick-start) - Build your first app
+- 🔧 [API Reference](/api-reference) - Detailed API docs
+- 📚 [Guides](/guides) - Step-by-step how-tos
+
+## Contributing
+
+Found a concept that's unclear or missing?
+
+- 🐛 [Report Issue](https://github.com/DDevFurkanPasa/NextGen/issues)
+- 💬 [Start Discussion](https://github.com/DDevFurkanPasa/NextGen/discussions)
+- 📝 [Edit on GitHub](https://github.com/DDevFurkanPasa/NextGen/tree/main/docs)
+
+---
+
+**Understanding the concepts makes you a better framework user.** Take time to read through these pages—they'll save you hours of trial and error.

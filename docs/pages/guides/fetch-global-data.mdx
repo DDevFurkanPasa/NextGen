@@ -1,0 +1,545 @@
+# How to Fetch Global 'Header' and 'Footer' Data
+
+Learn how to fetch and cache global data like headers and footers that appear on every page.
+
+## Overview
+
+Global data (Header, Footer, Navigation, etc.) should be:
+- ✅ Fetched once and reused across pages
+- ✅ Cached efficiently with ISR
+- ✅ Type-safe with GraphQL
+- ✅ Easy to update via Strapi
+
+This guide shows the best practices for handling global data with Strapi-NextGen Framework.
+
+## Step 1: Create Global Content Type in Strapi
+
+### 1. Create Single Type
+
+In Strapi admin:
+
+1. Go to **Content-Type Builder**
+2. Create **Single Type** → **Global**
+3. Add fields:
+   - `header` (Component)
+   - `footer` (Component)
+   - `seo` (Component - optional default SEO)
+
+### 2. Create Header Component
+
+Create component `layout.header`:
+
+```json
+{
+  "collectionName": "components_layout_headers",
+  "info": {
+    "displayName": "Header"
+  },
+  "attributes": {
+    "logo": {
+      "type": "media",
+      "allowedTypes": ["images"]
+    },
+    "navigation": {
+      "type": "component",
+      "repeatable": true,
+      "component": "layout.nav-item"
+    }
+  }
+}
+```
+
+### 3. Create Navigation Item Component
+
+Create component `layout.nav-item`:
+
+```json
+{
+  "collectionName": "components_layout_nav_items",
+  "info": {
+    "displayName": "Navigation Item"
+  },
+  "attributes": {
+    "label": { "type": "string", "required": true },
+    "href": { "type": "string", "required": true },
+    "external": { "type": "boolean", "default": false }
+  }
+}
+```
+
+### 4. Create Footer Component
+
+Create component `layout.footer`:
+
+```json
+{
+  "collectionName": "components_layout_footers",
+  "info": {
+    "displayName": "Footer"
+  },
+  "attributes": {
+    "copyright": { "type": "string" },
+    "social": {
+      "type": "component",
+      "repeatable": true,
+      "component": "layout.social-link"
+    },
+    "columns": {
+      "type": "component",
+      "repeatable": true,
+      "component": "layout.footer-column"
+    }
+  }
+}
+```
+
+## Step 2: Create GraphQL Query
+
+Create `graphql/queries/getGlobal.graphql`:
+
+```graphql filename="graphql/queries/getGlobal.graphql"
+query GetGlobal {
+  global {
+    data {
+      attributes {
+        header {
+          logo {
+            data {
+              attributes {
+                url
+                alternativeText
+                width
+                height
+              }
+            }
+          }
+          navigation {
+            label
+            href
+            external
+          }
+        }
+        footer {
+          copyright
+          social {
+            platform
+            url
+            icon
+          }
+          columns {
+            title
+            links {
+              label
+              href
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+## Step 3: Generate Types
+
+```bash
+npm run codegen
+```
+
+## Step 4: Create Global Data Fetcher
+
+Create `lib/get-global-data.ts`:
+
+```ts filename="lib/get-global-data.ts"
+import { strapi } from '@/lib/strapi';
+import { GetGlobalDocument } from '@/graphql/generated';
+import type { GetGlobalQuery } from '@/graphql/generated';
+
+export async function getGlobalData() {
+  const data = await strapi.getGlobal('global', GetGlobalDocument);
+  return data.global?.data?.attributes;
+}
+
+export type GlobalData = Awaited<ReturnType<typeof getGlobalData>>;
+```
+
+## Step 5: Create Header Component
+
+Create `components/Header.tsx`:
+
+```tsx filename="components/Header.tsx"
+import Link from 'next/link';
+import { StrapiImage } from 'strapi-nextgen-framework';
+import type { GlobalData } from '@/lib/get-global-data';
+
+interface HeaderProps {
+  data: NonNullable<GlobalData>['header'];
+}
+
+export function Header({ data }: HeaderProps) {
+  if (!data) return null;
+
+  return (
+    <header className="border-b">
+      <div className="container mx-auto px-4 py-4">
+        <div className="flex items-center justify-between">
+          {/* Logo */}
+          <Link href="/" className="flex items-center">
+            {data.logo?.data?.attributes && (
+              <StrapiImage
+                data={data.logo.data.attributes}
+                nextImageProps={{
+                  width: 150,
+                  height: 50,
+                  alt: "Logo",
+                }}
+              />
+            )}
+          </Link>
+
+          {/* Navigation */}
+          <nav className="flex gap-6">
+            {data.navigation?.map((item, index) => (
+              <Link
+                key={index}
+                href={item?.href || '#'}
+                target={item?.external ? '_blank' : undefined}
+                rel={item?.external ? 'noopener noreferrer' : undefined}
+                className="hover:text-blue-600 transition-colors"
+              >
+                {item?.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
+      </div>
+    </header>
+  );
+}
+```
+
+## Step 6: Create Footer Component
+
+Create `components/Footer.tsx`:
+
+```tsx filename="components/Footer.tsx"
+import Link from 'next/link';
+import type { GlobalData } from '@/lib/get-global-data';
+
+interface FooterProps {
+  data: NonNullable<GlobalData>['footer'];
+}
+
+export function Footer({ data }: FooterProps) {
+  if (!data) return null;
+
+  return (
+    <footer className="bg-gray-100 border-t mt-auto">
+      <div className="container mx-auto px-4 py-12">
+        {/* Footer Columns */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+          {data.columns?.map((column, index) => (
+            <div key={index}>
+              <h3 className="font-semibold mb-4">{column?.title}</h3>
+              <ul className="space-y-2">
+                {column?.links?.map((link, linkIndex) => (
+                  <li key={linkIndex}>
+                    <Link
+                      href={link?.href || '#'}
+                      className="text-gray-600 hover:text-gray-900"
+                    >
+                      {link?.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        {/* Social Links */}
+        {data.social && data.social.length > 0 && (
+          <div className="flex gap-4 mb-4">
+            {data.social.map((social, index) => (
+              <a
+                key={index}
+                href={social?.url || '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-600 hover:text-gray-900"
+                aria-label={social?.platform}
+              >
+                {/* Add your icon here */}
+                {social?.platform}
+              </a>
+            ))}
+          </div>
+        )}
+
+        {/* Copyright */}
+        <div className="text-center text-gray-600 text-sm pt-4 border-t">
+          {data.copyright || `© ${new Date().getFullYear()} All rights reserved`}
+        </div>
+      </div>
+    </footer>
+  );
+}
+```
+
+## Step 7: Use in Root Layout
+
+Update `app/layout.tsx`:
+
+```tsx filename="app/layout.tsx"
+import { getGlobalData } from '@/lib/get-global-data';
+import { Header } from '@/components/Header';
+import { Footer } from '@/components/Footer';
+
+export default async function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  // Fetch global data once for all pages
+  const globalData = await getGlobalData();
+
+  return (
+    <html lang="en">
+      <body className="flex flex-col min-h-screen">
+        {/* Header on every page */}
+        <Header data={globalData?.header} />
+        
+        {/* Page content */}
+        <main className="flex-1">
+          {children}
+        </main>
+        
+        {/* Footer on every page */}
+        <Footer data={globalData?.footer} />
+      </body>
+    </html>
+  );
+}
+```
+
+## Caching Strategy
+
+### Automatic ISR Caching
+
+The framework automatically caches global data using Next.js ISR:
+
+```ts
+// Cached for 60 seconds by default
+const data = await strapi.getGlobal('global', GetGlobalDocument);
+```
+
+### Custom Cache Tags
+
+For finer control, use custom cache tags:
+
+```ts filename="lib/get-global-data.ts"
+import { unstable_cache } from 'next/cache';
+
+export const getGlobalData = unstable_cache(
+  async () => {
+    const data = await strapi.getGlobal('global', GetGlobalDocument);
+    return data.global?.data?.attributes;
+  },
+  ['global-data'], // Cache key
+  {
+    revalidate: 3600, // Revalidate every hour
+    tags: ['global'], // Tag for on-demand revalidation
+  }
+);
+```
+
+### On-Demand Revalidation
+
+Revalidate when content changes:
+
+```ts filename="app/api/revalidate/route.ts"
+import { revalidateTag } from 'next/cache';
+import { NextRequest } from 'next/server';
+
+export async function POST(request: NextRequest) {
+  const secret = request.nextUrl.searchParams.get('secret');
+  
+  if (secret !== process.env.REVALIDATION_SECRET) {
+    return new Response('Invalid secret', { status: 401 });
+  }
+
+  // Revalidate global data
+  revalidateTag('global');
+  
+  return new Response('Revalidated', { status: 200 });
+}
+```
+
+See [Revalidation Webhook Guide](/guides/revalidation-webhook) for full setup.
+
+## Advanced Patterns
+
+### Loading States
+
+Show skeleton while loading:
+
+```tsx filename="components/Header.tsx"
+import { Suspense } from 'react';
+
+export function HeaderSkeleton() {
+  return (
+    <header className="border-b">
+      <div className="container mx-auto px-4 py-4">
+        <div className="h-12 bg-gray-200 animate-pulse rounded" />
+      </div>
+    </header>
+  );
+}
+
+// In layout:
+<Suspense fallback={<HeaderSkeleton />}>
+  <Header data={globalData?.header} />
+</Suspense>
+```
+
+### Multiple Locales
+
+Fetch global data per locale:
+
+```ts filename="lib/get-global-data.ts"
+export async function getGlobalData(locale = 'en') {
+  const data = await strapi.getGlobal('global', GetGlobalDocument, {
+    locale,
+  });
+  return data.global?.data?.attributes;
+}
+
+// In layout:
+const globalData = await getGlobalData(params.lang);
+```
+
+### Conditional Rendering
+
+Show different headers per section:
+
+```tsx filename="app/layout.tsx"
+export default async function RootLayout({ children }) {
+  const globalData = await getGlobalData();
+  const pathname = headers().get('x-pathname');
+  
+  const showHeader = !pathname?.startsWith('/auth');
+  
+  return (
+    <html>
+      <body>
+        {showHeader && <Header data={globalData?.header} />}
+        {children}
+        <Footer data={globalData?.footer} />
+      </body>
+    </html>
+  );
+}
+```
+
+## Troubleshooting
+
+### Global Data Not Updating
+
+**Problem**: Changes in Strapi don't reflect on site
+
+**Solutions**:
+1. Set up [revalidation webhook](/guides/revalidation-webhook)
+2. Clear Next.js cache: `rm -rf .next`
+3. Check cache duration in `strapi.getGlobal()`
+4. Verify content is published in Strapi
+
+### TypeScript Errors
+
+**Problem**: Type errors on global data
+
+**Solutions**:
+1. Run `npm run codegen`
+2. Check GraphQL query includes all needed fields
+3. Use optional chaining: `data?.header?.navigation`
+4. Add type guards in components
+
+### Performance Issues
+
+**Problem**: Layout re-fetches on every page
+
+**Solutions**:
+1. Verify you're using root `layout.tsx`
+2. Check fetch is in server component
+3. Use `unstable_cache` for more control
+4. Monitor with React DevTools
+
+## Best Practices
+
+### 1. Keep Global Data Lean
+
+Only fetch what you need:
+```graphql
+# ❌ Don't fetch everything
+query GetGlobal {
+  global {
+    data {
+      attributes {
+        # ... 50 fields
+      }
+    }
+  }
+}
+
+# ✅ Only fetch what's displayed
+query GetGlobal {
+  global {
+    data {
+      attributes {
+        header { ... }
+        footer { ... }
+      }
+    }
+  }
+}
+```
+
+### 2. Use Proper Cache Tags
+
+Tag global data for easy revalidation:
+```ts
+revalidateTag('global-header');
+revalidateTag('global-footer');
+```
+
+### 3. Handle Missing Data
+
+Always provide fallbacks:
+```tsx
+<Header data={globalData?.header ?? DEFAULT_HEADER} />
+```
+
+### 4. Optimize Images
+
+Use appropriate sizes for logo/icons:
+```tsx
+<StrapiImage
+  data={logo}
+  nextImageProps={{
+    width: 150,
+    height: 50,
+    priority: true, // Logo is above fold
+  }}
+/>
+```
+
+## Next Steps
+
+- [Set Up Revalidation](/guides/revalidation-webhook) - Auto-update on content changes
+- [SEO Metadata](/guides/seo-metadata) - Add global SEO defaults
+- [Error Handling](/guides/error-handling) - Handle missing global data
+
+## See Also
+
+- [Next.js Layouts](https://nextjs.org/docs/app/building-your-application/routing/pages-and-layouts#layouts)
+- [Data Fetching](https://nextjs.org/docs/app/building-your-application/data-fetching)
+- [createStrapiSDK API](/api-reference/create-sdk)

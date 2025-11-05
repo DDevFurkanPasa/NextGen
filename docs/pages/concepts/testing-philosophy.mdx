@@ -1,0 +1,598 @@
+# Our Testing Philosophy
+
+Understanding the framework's comprehensive testing strategy and quality standards.
+
+## Testing Principles
+
+Strapi-NextGen Framework was built with testing as a first-class concern, not an afterthought.
+
+### 1. Production-Ready Quality
+
+**Goal**: 96.59% code coverage with real-world test scenarios
+
+```
+✅ 220 tests passing
+✅ 96.59% statements covered
+✅ 96% functions covered  
+✅ 94.52% branches covered
+✅ 12 test suites
+```
+
+**Why?** Because frameworks used in production must be bulletproof.
+
+### 2. Test What Matters
+
+We don't chase 100% coverage. We test:
+- ✅ Critical user paths
+- ✅ Error handling
+- ✅ Edge cases
+- ✅ Integration points
+- ❌ Not: trivial getters/setters
+- ❌ Not: type definitions
+
+### 3. Fail Fast, Fix Faster
+
+**Automated Quality Gates**:
+- CI/CD blocks PRs with failing tests
+- Coverage regression prevention
+- Automated accessibility testing
+- Performance benchmarking
+
+## Testing Pyramid
+
+```
+        ┌─────────────┐
+        │    E2E      │  15% - User workflows
+        │  (115 tests)│
+        ├─────────────┤
+        │ Integration │  15% - API interactions
+        │  (18 tests) │
+        ├─────────────┤
+        │    Unit     │  70% - Component logic
+        │  (87 tests) │
+        └─────────────┘
+```
+
+### Unit Tests (70%)
+
+**Purpose**: Test individual functions in isolation
+
+**Example**:
+```ts
+// src/helpers/__tests__/metadata.test.ts
+describe('generateStrapiMetadata', () => {
+  it('should generate basic metadata from SEO', () => {
+    const seo = {
+      metaTitle: 'Test Page',
+      metaDescription: 'Test description',
+    };
+    
+    const result = generateStrapiMetadata(seo);
+    
+    expect(result.title).toBe('Test Page');
+    expect(result.description).toBe('Test description');
+  });
+
+  it('should handle null SEO gracefully', () => {
+    const result = generateStrapiMetadata(null);
+    
+    expect(result).toEqual({});
+  });
+});
+```
+
+**Coverage**: All helper functions, utilities, SDK methods
+
+### Integration Tests (15%)
+
+**Purpose**: Test interactions with external systems
+
+**Example**:
+```ts
+// src/sdk/__tests__/integration/strapi-connection.test.ts
+describe('Strapi SDK Integration', () => {
+  it('should connect to real Strapi instance', async () => {
+    const sdk = createStrapiSDK({
+      url: process.env.TEST_STRAPI_URL!,
+    });
+    
+    const data = await sdk.rawQuery(GetHealthDocument, {});
+    
+    expect(data).toBeDefined();
+  });
+});
+```
+
+**Coverage**: GraphQL client, cache tags, authentication
+
+### E2E Tests (15%)
+
+**Purpose**: Test complete user workflows
+
+**Example**:
+```ts
+// e2e/blog.spec.ts
+test('user can read blog article', async ({ page }) => {
+  await page.goto('/blog/test-article');
+  
+  // Verify content loads
+  await expect(page.locator('h1')).toContainText('Test Article');
+  
+  // Verify image displays
+  await expect(page.locator('img[alt="Hero"]')).toBeVisible();
+  
+  // Verify navigation works
+  await page.click('text=Back to Blog');
+  await expect(page).toHaveURL('/blog');
+});
+```
+
+**Coverage**: Full pages, navigation, user interactions
+
+## Testing Tools
+
+### Vitest (Unit & Integration)
+
+**Why Vitest?**
+- ⚡ Fast (Vite-powered)
+- 🔧 Great DX (hot reload, watch mode)
+- 📊 Built-in coverage (V8)
+- 🎯 Jest-compatible API
+
+**Configuration**:
+```ts
+// vitest.config.ts
+export default defineConfig({
+  test: {
+    globals: true,
+    environment: 'node',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html', 'lcov'],
+      exclude: [
+        'node_modules/',
+        'dist/',
+        '**/*.d.ts',
+        '**/__tests__/**',
+      ],
+    },
+  },
+});
+```
+
+### Playwright (E2E)
+
+**Why Playwright?**
+- 🌐 Cross-browser (Chromium, Firefox, WebKit)
+- 📱 Mobile emulation
+- 🎭 Network mocking
+- 📸 Visual regression
+- ♿ Accessibility testing
+
+**Configuration**:
+```ts
+// playwright.config.ts
+export default defineConfig({
+  testDir: './e2e',
+  fullyParallel: true,
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+    { name: 'Mobile Chrome', use: { ...devices['Pixel 5'] } },
+    { name: 'Mobile Safari', use: { ...devices['iPhone 12'] } },
+  ],
+});
+```
+
+## Test Organization
+
+### Directory Structure
+
+```
+src/
+├── components/
+│   ├── StrapiImage.tsx
+│   └── __tests__/
+│       └── StrapiImage.test.tsx
+├── helpers/
+│   ├── metadata.ts
+│   └── __tests__/
+│       └── metadata.test.ts
+├── sdk/
+│   ├── index.ts
+│   └── __tests__/
+│       ├── sdk-core.test.ts
+│       └── integration/
+│           └── strapi-connection.test.ts
+└── renderer/
+    ├── index.tsx
+    └── __tests__/
+        └── renderer.test.tsx
+
+e2e/
+├── accessibility.spec.ts
+├── performance.spec.ts
+├── visual.spec.ts
+└── load.spec.ts
+```
+
+### Naming Conventions
+
+```
+Component:     StrapiImage.tsx
+Unit Test:     StrapiImage.test.tsx
+Integration:   strapi-connection.test.ts
+E2E:          blog.spec.ts
+```
+
+## What We Test
+
+### 1. Happy Paths ✅
+
+**Core functionality must work**:
+
+```ts
+it('should render image with valid data', () => {
+  const data = {
+    url: '/uploads/image.jpg',
+    width: 800,
+    height: 600,
+  };
+  
+  render(<StrapiImage data={data} />);
+  
+  const img = screen.getByRole('img');
+  expect(img).toBeInTheDocument();
+  expect(img).toHaveAttribute('src', expect.stringContaining('image.jpg'));
+});
+```
+
+### 2. Error Handling ✅
+
+**Graceful degradation is critical**:
+
+```ts
+it('should return null when data is null', () => {
+  const { container } = render(<StrapiImage data={null} />);
+  
+  expect(container.firstChild).toBeNull();
+});
+
+it('should log warning in development for missing URL', () => {
+  const consoleWarn = vi.spyOn(console, 'warn');
+  process.env.NODE_ENV = 'development';
+  
+  render(<StrapiImage data={{}} />);
+  
+  expect(consoleWarn).toHaveBeenCalledWith(
+    expect.stringContaining('StrapiImage: Missing required field')
+  );
+});
+```
+
+### 3. Edge Cases ✅
+
+**Unexpected inputs must be handled**:
+
+```ts
+it('should handle empty string slug', () => {
+  const result = generateCacheTag('');
+  expect(result).toBe('page-default');
+});
+
+it('should handle special characters in slug', () => {
+  const result = generateCacheTag('test/page?id=1');
+  expect(result).toBe('page-test-page-id-1');
+});
+
+it('should handle extremely long slugs', () => {
+  const longSlug = 'a'.repeat(1000);
+  const result = generateCacheTag(longSlug);
+  expect(result.length).toBeLessThan(256); // Max cache key length
+});
+```
+
+### 4. Accessibility ✅
+
+**WCAG 2.1 Level AA compliance**:
+
+```ts
+// e2e/accessibility.spec.ts
+test('homepage is accessible', async ({ page }) => {
+  await page.goto('/');
+  
+  const results = await new AxeBuilder({ page }).analyze();
+  
+  expect(results.violations).toEqual([]);
+});
+```
+
+**90 accessibility tests across 5 browsers**
+
+### 5. Performance ✅
+
+**Core Web Vitals monitoring**:
+
+```ts
+// e2e/performance.spec.ts
+test('LCP is under 2.5s', async ({ page }) => {
+  await page.goto('/');
+  
+  const lcp = await page.evaluate(() => {
+    return new Promise((resolve) => {
+      new PerformanceObserver((list) => {
+        const entries = list.getEntries();
+        const lastEntry = entries[entries.length - 1];
+        resolve(lastEntry.renderTime || lastEntry.loadTime);
+      }).observe({ entryTypes: ['largest-contentful-paint'] });
+    });
+  });
+  
+  expect(lcp).toBeLessThan(2500);
+});
+```
+
+## Coverage Goals
+
+### Current Coverage
+
+```
+File                  | Stmts | Branch | Funcs | Lines
+----------------------|-------|--------|-------|-------
+All files             | 96.59 |  94.52 |    96 | 96.59
+  components          |   100 |   92.3 |   100 |   100
+    StrapiImage.tsx   |   100 |   92.3 |   100 |   100
+  helpers             |   100 |   93.1 |   100 |   100
+    metadata.ts       |   100 |   93.1 |   100 |   100
+  preview             |   100 |    100 |   100 |   100
+    index.ts          |   100 |    100 |   100 |   100
+  renderer            |   100 |    100 |   100 |   100
+    error-boundary.tsx|   100 |    100 |   100 |   100
+  revalidation        | 93.89 |  88.23 |    90 | 93.89
+    index.ts          | 93.89 |  88.23 |    90 | 93.89
+  sdk                 |   100 |  95.23 |   100 |   100
+    index.ts          |   100 |  95.23 |   100 |   100
+```
+
+### Thresholds (CI/CD Enforced)
+
+```ts
+// vitest.config.ts
+thresholds: {
+  statements: 96,   // Locked at current baseline
+  branches: 94,     // Prevents regression
+  functions: 95,    // Must maintain quality
+  lines: 96,        // Enforced in CI/CD
+}
+```
+
+## Testing Best Practices
+
+### 1. Arrange-Act-Assert
+
+```ts
+it('should generate cache tag', () => {
+  // Arrange
+  const slug = 'test-page';
+  
+  // Act
+  const result = generateCacheTag(slug);
+  
+  // Assert
+  expect(result).toBe('page-test-page');
+});
+```
+
+### 2. One Assertion Per Test
+
+```ts
+// ❌ Multiple assertions (hard to debug)
+it('should handle SEO data', () => {
+  const result = generateStrapiMetadata(seo);
+  expect(result.title).toBe('Test');
+  expect(result.description).toBe('Description');
+  expect(result.keywords).toEqual(['test']);
+});
+
+// ✅ Focused tests (easy to debug)
+it('should generate title from SEO', () => {
+  const result = generateStrapiMetadata({ metaTitle: 'Test' });
+  expect(result.title).toBe('Test');
+});
+
+it('should generate description from SEO', () => {
+  const result = generateStrapiMetadata({ metaDescription: 'Description' });
+  expect(result.description).toBe('Description');
+});
+```
+
+### 3. Test Behavior, Not Implementation
+
+```ts
+// ❌ Testing implementation details
+it('should call generateCacheTag function', () => {
+  const spy = vi.spyOn(utils, 'generateCacheTag');
+  getData('test');
+  expect(spy).toHaveBeenCalled();
+});
+
+// ✅ Testing behavior
+it('should cache data with correct tag', async () => {
+  const result = await getData('test');
+  expect(result).toBeDefined();
+  // Verify caching works, not how it's implemented
+});
+```
+
+### 4. Use Descriptive Test Names
+
+```ts
+// ❌ Vague
+it('works', () => { /* ... */ });
+it('test 1', () => { /* ... */ });
+
+// ✅ Clear
+it('should render image when data is provided', () => { /* ... */ });
+it('should return null when data is missing', () => { /* ... */ });
+it('should log warning in development mode', () => { /* ... */ });
+```
+
+## Continuous Testing
+
+### CI/CD Pipeline
+
+```yaml
+# .github/workflows/test.yml
+name: Tests
+
+on: [push, pull_request]
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npm run test:coverage
+      
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npx playwright install --with-deps
+      - run: npm run test:e2e
+      
+  accessibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npx playwright install --with-deps
+      - run: npm run test:e2e:a11y
+```
+
+### Quality Gates
+
+**PRs are blocked if**:
+- ❌ Any test fails
+- ❌ Coverage drops below baseline
+- ❌ Accessibility violations found
+- ❌ Performance budgets exceeded
+
+## Running Tests
+
+### Unit Tests
+
+```bash
+# Run all unit tests
+npm run test:unit
+
+# Watch mode (development)
+npm run test:watch
+
+# Coverage report
+npm run test:coverage
+
+# Coverage with UI
+npm run test:coverage:ui
+```
+
+### E2E Tests
+
+```bash
+# Run all E2E tests
+npm run test:e2e
+
+# Run with UI (debug)
+npm run test:e2e:ui
+
+# Run specific suite
+npm run test:e2e:a11y      # Accessibility
+npm run test:e2e:perf      # Performance
+npm run test:e2e:visual    # Visual regression
+```
+
+### CI Simulation
+
+```bash
+# Run everything CI runs
+npm run build
+npm run test:unit
+npm run test:e2e
+npm run test:coverage
+```
+
+## Test-Driven Development
+
+### TDD Workflow
+
+1. **Write failing test**
+   ```ts
+   it('should generate metadata', () => {
+     const result = generateStrapiMetadata(seo);
+     expect(result.title).toBe('Test');
+   });
+   ```
+
+2. **Run test (fails)** ❌
+   ```bash
+   npm run test:watch
+   # FAIL: generateStrapiMetadata is not defined
+   ```
+
+3. **Write minimal code**
+   ```ts
+   export function generateStrapiMetadata(seo: StrapiSEO) {
+     return { title: seo?.metaTitle };
+   }
+   ```
+
+4. **Run test (passes)** ✅
+   ```bash
+   # PASS: should generate metadata
+   ```
+
+5. **Refactor & repeat**
+
+## Debugging Tests
+
+### Vitest Debug
+
+```bash
+# Run specific test file
+npm run test:unit src/helpers/__tests__/metadata.test.ts
+
+# Run specific test
+npm run test:unit -- -t "should generate metadata"
+
+# Debug in VS Code
+# Add breakpoint → F5 → "Debug Vitest Tests"
+```
+
+### Playwright Debug
+
+```bash
+# Run with UI mode
+npm run test:e2e:ui
+
+# Debug specific test
+npx playwright test e2e/blog.spec.ts --debug
+
+# Headed mode (see browser)
+npx playwright test --headed
+```
+
+## Next Steps
+
+- [Quick Start Tutorial](/tutorials/quick-start) - Build your first test
+- [Caching Strategy](/concepts/caching-strategy) - Understand what to test
+- [API Reference](/api-reference) - Test all framework APIs
+
+## See Also
+
+- [Vitest Documentation](https://vitest.dev/)
+- [Playwright Documentation](https://playwright.dev/)
+- [Testing Library](https://testing-library.com/)
+- [Coverage Reports](https://github.com/DDevFurkanPasa/NextGen/actions)

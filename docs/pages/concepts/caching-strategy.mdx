@@ -1,0 +1,516 @@
+# How Our Caching Strategy Works
+
+Deep dive into the framework's intelligent caching system for optimal performance.
+
+## Overview
+
+Strapi-NextGen Framework implements a multi-layered caching strategy that combines:
+
+- ✅ **Next.js ISR** - Incremental Static Regeneration
+- ✅ **Cache Tags** - Granular invalidation
+- ✅ **On-Demand Revalidation** - Instant updates
+- ✅ **Automatic Cache Keys** - No manual configuration
+
+## The Caching Hierarchy
+
+```
+┌─────────────────────────────────────────┐
+│  1. Next.js Data Cache (ISR)            │
+│  • Time-based: revalidate: 3600         │
+│  • Tag-based: tags: ['articles']        │
+└─────────────────────────────────────────┘
+              ↓
+┌─────────────────────────────────────────┐
+│  2. Framework Cache Tags                │
+│  • Automatic generation                 │
+│  • Content-type based                   │
+│  • Granular invalidation                │
+└─────────────────────────────────────────┘
+              ↓
+┌─────────────────────────────────────────┐
+│  3. GraphQL Response Cache              │
+│  • Query-level caching                  │
+│  • Strapi CDN integration               │
+└─────────────────────────────────────────┘
+```
+
+## How It Works
+
+### 1. Automatic Cache Tag Generation
+
+Every Strapi query automatically gets cache tags:
+
+```ts
+// You write:
+const data = await strapi.getPage('home', GetHomePageDocument);
+
+// Framework generates:
+// - Cache tag: 'page-home'
+// - Revalidation: 3600 seconds (1 hour)
+```
+
+**Tag Generation Rules**:
+
+| Query Type | Generated Tag | Example |
+|------------|---------------|---------|
+| `getPage(slug)` | `page-{slug}` | `page-home` |
+| `getCollection(type)` | `{type}` | `articles` |
+| `getGlobal(name)` | `global-{name}` | `global-header` |
+| `rawQuery()` | Manual or auto | Based on query |
+
+### 2. Time-Based Revalidation (ISR)
+
+Default behavior without webhooks:
+
+```ts
+// Cached for 1 hour, then regenerated
+const data = await strapi.getPage('home', GetHomePageDocument);
+// Next request after 1 hour triggers background regeneration
+```
+
+**ISR Flow**:
+
+1. **First Request** (Cold Cache)
+   - Fetches from Strapi
+   - Generates static page
+   - Caches for 1 hour
+
+2. **Subsequent Requests** (Warm Cache)
+   - Serves cached version
+   - No Strapi request
+   - Instant response
+
+3. **After Revalidation Period**
+   - Serves stale cache
+   - Regenerates in background
+   - Next request gets fresh data
+
+### 3. Tag-Based Invalidation
+
+Instant updates with webhooks:
+
+```ts
+// Content published in Strapi
+// → Webhook triggered
+// → revalidateTag('articles')
+// → All 'articles' cache invalidated
+// → Next request fetches fresh data
+```
+
+**Selective Invalidation**:
+
+```ts
+// Invalidate only articles
+revalidateTag('articles');
+
+// Invalidate specific article
+revalidateTag('article-my-slug');
+
+// Invalidate global data
+revalidateTag('global');
+```
+
+## Cache Configuration
+
+### Default Configuration
+
+```ts
+// Framework defaults
+{
+  revalidate: 3600,          // 1 hour
+  tags: ['auto-generated'],  // Based on query
+  next: {
+    revalidate: 3600,
+  },
+}
+```
+
+### Custom Per-Query Configuration
+
+```ts
+import { unstable_cache } from 'next/cache';
+
+export const getArticles = unstable_cache(
+  async () => {
+    return await strapi.getCollection('articles', GetArticlesDocument);
+  },
+  ['articles-list'],           // Cache key
+  {
+    revalidate: 1800,          // 30 minutes
+    tags: ['articles', 'blog'], // Multiple tags
+  }
+);
+```
+
+### Custom Per-Route Configuration
+
+```ts
+// app/blog/page.tsx
+export const revalidate = 600; // 10 minutes
+
+export default async function BlogPage() {
+  const data = await strapi.getCollection('articles', GetArticlesDocument);
+  // ...
+}
+```
+
+## Cache Invalidation Strategies
+
+### 1. On-Demand (Webhooks)
+
+**Best for**: Production sites with frequent updates
+
+```ts
+// app/api/revalidate/route.ts
+import { createStrapiRevalidator } from 'strapi-nextgen-framework';
+
+export const POST = createStrapiRevalidator({
+  secret: process.env.REVALIDATION_SECRET!,
+  tagMap: {
+    'api::article.article': 'articles',
+  },
+});
+```
+
+**Pros**:
+- ✅ Instant updates
+- ✅ Efficient (only invalidates changed content)
+- ✅ No manual cache clearing
+
+**Cons**:
+- ⚠️ Requires webhook setup
+- ⚠️ Depends on Strapi being reachable
+
+### 2. Time-Based (ISR)
+
+**Best for**: Sites with predictable update schedules
+
+```ts
+export const revalidate = 3600; // Hourly updates
+```
+
+**Pros**:
+- ✅ Simple setup
+- ✅ Predictable regeneration
+- ✅ No external dependencies
+
+**Cons**:
+- ⚠️ Updates delayed by revalidation period
+- ⚠️ May regenerate unnecessarily
+
+### 3. Hybrid (Recommended)
+
+**Best for**: Most production use cases
+
+```ts
+// Time-based fallback + webhook updates
+export const getArticles = unstable_cache(
+  async () => {
+    return await strapi.getCollection('articles', GetArticlesDocument);
+  },
+  ['articles'],
+  {
+    revalidate: 3600,        // Fallback: hourly
+    tags: ['articles'],      // Webhook: instant
+  }
+);
+```
+
+**Pros**:
+- ✅ Instant updates when webhook works
+- ✅ Automatic fallback if webhook fails
+- ✅ Best of both worlds
+
+## Cache Warming Strategies
+
+### 1. Build-Time Generation
+
+Generate critical pages at build:
+
+```ts
+// app/blog/[slug]/page.tsx
+export async function generateStaticParams() {
+  const data = await strapi.getCollection('articles', GetArticlesDocument);
+  
+  return data.articles?.data.map((article) => ({
+    slug: article.attributes?.slug,
+  })) || [];
+}
+```
+
+**Result**:
+- All blog pages generated at build
+- Instant first load
+- ISR for new articles
+
+### 2. Incremental Warming
+
+Gradually build pages on-demand:
+
+```ts
+// Only generate top 10 at build
+export async function generateStaticParams() {
+  const data = await strapi.getCollection('articles', GetArticlesDocument, {
+    pagination: { limit: 10 },
+    sort: 'publishedAt:desc',
+  });
+  
+  return data.articles?.data.map((article) => ({
+    slug: article.attributes?.slug,
+  })) || [];
+}
+
+// Others generated on first visit
+export const dynamicParams = true;
+```
+
+### 3. Manual Pre-warming
+
+Trigger cache population:
+
+```ts
+// scripts/warm-cache.ts
+async function warmCache() {
+  const baseUrl = process.env.SITE_URL;
+  
+  // Fetch critical pages
+  await fetch(`${baseUrl}/`);
+  await fetch(`${baseUrl}/about`);
+  await fetch(`${baseUrl}/blog`);
+  
+  console.log('✅ Cache warmed');
+}
+```
+
+## Performance Optimization
+
+### 1. Minimize Cache Keys
+
+```ts
+// ❌ Too many cache keys
+export const getData = (id: string, lang: string, user: string) =>
+  unstable_cache(
+    async () => { /* ... */ },
+    [`data-${id}-${lang}-${user}`], // Explosion of cache entries
+  );
+
+// ✅ Minimal cache keys
+export const getData = (id: string) =>
+  unstable_cache(
+    async () => { /* ... */ },
+    [`data-${id}`], // One per item
+  );
+```
+
+### 2. Granular Tags
+
+```ts
+// ❌ Too broad
+revalidateTag('content'); // Invalidates everything
+
+// ✅ Specific
+revalidateTag('articles');
+revalidateTag(`article-${slug}`);
+```
+
+### 3. Parallel Fetching
+
+```ts
+// ❌ Sequential
+const articles = await strapi.getCollection('articles', GetArticlesDocument);
+const pages = await strapi.getCollection('pages', GetPagesDocument);
+
+// ✅ Parallel
+const [articles, pages] = await Promise.all([
+  strapi.getCollection('articles', GetArticlesDocument),
+  strapi.getCollection('pages', GetPagesDocument),
+]);
+```
+
+## Monitoring Cache Performance
+
+### 1. Next.js Build Output
+
+```bash
+npm run build
+
+# Shows:
+# ● /blog/[slug]  (ISR: 3600s)  1.2kB
+# ├ /blog/article-1
+# ├ /blog/article-2
+# └ /blog/article-3
+```
+
+### 2. Cache Hit Rate
+
+```ts
+// Add logging
+export const getArticles = unstable_cache(
+  async () => {
+    console.log('🔄 Cache MISS - Fetching from Strapi');
+    return await strapi.getCollection('articles', GetArticlesDocument);
+  },
+  ['articles'],
+  {
+    revalidate: 3600,
+    tags: ['articles'],
+  }
+);
+
+// If you see this log often → cache not working
+// If you rarely see it → cache working well
+```
+
+### 3. Lighthouse Performance
+
+```bash
+npm run benchmark:lighthouse
+
+# Check:
+# - Time to First Byte (TTFB)
+# - First Contentful Paint (FCP)
+# - Largest Contentful Paint (LCP)
+```
+
+## Common Patterns
+
+### Pattern 1: List + Detail Pages
+
+```ts
+// List page: Longer cache
+export const getArticlesList = unstable_cache(
+  async () => strapi.getCollection('articles', GetArticlesDocument),
+  ['articles-list'],
+  {
+    revalidate: 3600,      // 1 hour OK for list
+    tags: ['articles'],
+  }
+);
+
+// Detail page: Shorter cache
+export const getArticle = (slug: string) => unstable_cache(
+  async () => strapi.getPage(slug, GetArticleDocument),
+  [`article-${slug}`],
+  {
+    revalidate: 600,       // 10 min for fresh content
+    tags: ['articles', `article-${slug}`],
+  }
+)();
+```
+
+### Pattern 2: Global + Page Data
+
+```ts
+// Global data: Rarely changes
+export const getGlobal = unstable_cache(
+  async () => strapi.getGlobal('global', GetGlobalDocument),
+  ['global'],
+  {
+    revalidate: 86400,     // 24 hours
+    tags: ['global'],
+  }
+);
+
+// Page data: Changes frequently
+export const getPage = (slug: string) => unstable_cache(
+  async () => strapi.getPage(slug, GetPageDocument),
+  [`page-${slug}`],
+  {
+    revalidate: 600,       // 10 minutes
+    tags: ['pages', `page-${slug}`],
+  }
+)();
+```
+
+### Pattern 3: User-Specific Data
+
+```ts
+// ❌ Don't cache user-specific data globally
+export const getUserData = (userId: string) => unstable_cache(
+  async () => fetchUserData(userId),
+  [`user-${userId}`], // Problem: one cache per user
+);
+
+// ✅ Fetch on server, skip cache
+export async function getUserData(userId: string) {
+  return await fetchUserData(userId);
+  // Next.js automatic request memoization during render
+}
+```
+
+## Troubleshooting
+
+### Cache Not Working
+
+**Problem**: Same data fetched repeatedly
+
+**Solutions**:
+1. Check cache tags match in webhook and fetcher
+2. Verify `revalidate` is set
+3. Ensure using `unstable_cache` or route-level `revalidate`
+4. Check production mode (`npm run build && npm start`)
+
+### Stale Data
+
+**Problem**: Content updated but site shows old data
+
+**Solutions**:
+1. Set up [revalidation webhook](/guides/revalidation-webhook)
+2. Reduce `revalidate` time
+3. Clear cache: `rm -rf .next`
+4. Check webhook logs in Strapi
+
+### Too Many Regenerations
+
+**Problem**: High server load from regenerations
+
+**Solutions**:
+1. Increase `revalidate` time
+2. Use more specific cache tags
+3. Implement rate limiting in webhook
+4. Consider CDN caching layer
+
+## Best Practices
+
+### 1. Match Cache Duration to Content Type
+
+```ts
+// News: 5 minutes
+export const revalidate = 300;
+
+// Blog: 1 hour  
+export const revalidate = 3600;
+
+// Legal pages: 1 day
+export const revalidate = 86400;
+```
+
+### 2. Always Provide Fallback
+
+```ts
+// Time-based + tag-based
+{
+  revalidate: 3600,      // Fallback
+  tags: ['articles'],    // Preferred
+}
+```
+
+### 3. Use Specific Tags
+
+```ts
+// Multiple specific tags > one broad tag
+tags: ['articles', 'featured', `author-${authorId}`]
+```
+
+### 4. Monitor and Adjust
+
+Track cache hit rates and adjust durations based on:
+- Content update frequency
+- Traffic patterns
+- Server capacity
+
+## See Also
+
+- [Next.js Caching](https://nextjs.org/docs/app/building-your-application/caching)
+- [Revalidation Guide](/guides/revalidation-webhook)
+- [GraphQL Strategy](/concepts/graphql-vs-rest)

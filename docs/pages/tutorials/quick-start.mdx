@@ -1,0 +1,230 @@
+# Quick Start: Strapi + NextGen in 5 Minutes
+
+This guide will walk you through setting up Strapi-NextGen Framework and displaying your first image in just 5 minutes!
+
+## Prerequisites
+
+- Node.js 18+ installed
+- A running Strapi v4 instance with GraphQL plugin enabled
+- Basic knowledge of Next.js App Router
+
+## Step 1: Create a Next.js Project
+
+```bash
+npx create-next-app@latest my-strapi-site
+cd my-strapi-site
+```
+
+When prompted:
+- ✅ TypeScript: **Yes**
+- ✅ ESLint: **Yes**
+- ✅ Tailwind CSS: **Yes** (optional)
+- ✅ `src/` directory: **No**
+- ✅ App Router: **Yes**
+- ❌ Import alias: **No**
+
+## Step 2: Install Strapi-NextGen Framework
+
+```bash
+npm install strapi-nextgen-framework graphql graphql-request zod
+```
+
+### Install Dev Dependencies (for type generation)
+
+```bash
+npm install -D @graphql-codegen/cli @graphql-codegen/typescript \
+  @graphql-codegen/typescript-operations \
+  @graphql-codegen/typescript-graphql-request
+```
+
+## Step 3: Configure GraphQL Code Generator
+
+Create `codegen.ts` in your project root:
+
+```ts filename="codegen.ts"
+import type { CodegenConfig } from '@graphql-codegen/cli';
+
+const config: CodegenConfig = {
+  schema: process.env.NEXT_PUBLIC_STRAPI_GRAPHQL_URL || 'http://localhost:1337/graphql',
+  documents: ['graphql/**/*.graphql'],
+  generates: {
+    './graphql/generated.ts': {
+      plugins: [
+        'typescript',
+        'typescript-operations',
+        'typescript-graphql-request',
+      ],
+    },
+  },
+};
+
+export default config;
+```
+
+Add to your `package.json` scripts:
+
+```json filename="package.json"
+{
+  "scripts": {
+    "codegen": "graphql-codegen --config codegen.ts"
+  }
+}
+```
+
+## Step 4: Set Up Environment Variables
+
+Create `.env.local`:
+
+```bash filename=".env.local"
+# Strapi Configuration
+NEXT_PUBLIC_STRAPI_URL=http://localhost:1337
+NEXT_PUBLIC_STRAPI_GRAPHQL_URL=http://localhost:1337/graphql
+
+# Optional: For authenticated requests
+STRAPI_API_TOKEN=your-strapi-api-token-here
+```
+
+## Step 5: Create Your First GraphQL Query
+
+Create `graphql/queries/getHomePage.graphql`:
+
+```graphql filename="graphql/queries/getHomePage.graphql"
+query GetHomePage {
+  homePage {
+    data {
+      id
+      attributes {
+        title
+        description
+        heroImage {
+          data {
+            id
+            attributes {
+              url
+              alternativeText
+              width
+              height
+              formats
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+## Step 6: Generate TypeScript Types
+
+```bash
+npm run codegen
+```
+
+This creates `graphql/generated.ts` with fully typed queries!
+
+## Step 7: Initialize the SDK
+
+Create `lib/strapi.ts`:
+
+```ts filename="lib/strapi.ts"
+import { createStrapiSDK } from 'strapi-nextgen-framework';
+
+export const strapi = createStrapiSDK({
+  url: process.env.NEXT_PUBLIC_STRAPI_GRAPHQL_URL!,
+  token: process.env.STRAPI_API_TOKEN,
+  logging: {
+    queries: process.env.NODE_ENV === 'development',
+  },
+});
+```
+
+## Step 8: Create Your First Page
+
+Update `app/page.tsx`:
+
+```tsx filename="app/page.tsx"
+import { strapi } from '@/lib/strapi';
+import { StrapiImage } from 'strapi-nextgen-framework';
+import { GetHomePageDocument } from '@/graphql/generated';
+
+export default async function Home() {
+  // Fetch data with type-safety and automatic caching
+  const data = await strapi.rawQuery(GetHomePageDocument, {});
+  
+  const page = data.homePage?.data?.attributes;
+  const heroImage = page?.heroImage?.data?.attributes;
+
+  if (!page) {
+    return <div>Page not found</div>;
+  }
+
+  return (
+    <main className="container mx-auto px-4 py-16">
+      <h1 className="text-4xl font-bold mb-4">{page.title}</h1>
+      <p className="text-xl text-gray-600 mb-8">{page.description}</p>
+      
+      {/* 🎉 Your first Strapi image! */}
+      {heroImage && (
+        <StrapiImage
+          data={heroImage}
+          nextImageProps={{
+            priority: true,
+            className: "rounded-lg shadow-xl",
+          }}
+        />
+      )}
+    </main>
+  );
+}
+```
+
+## Step 9: Run Your App
+
+```bash
+npm run dev
+```
+
+Visit `http://localhost:3000` and you should see:
+- ✅ Your page title
+- ✅ Your description
+- ✅ Your hero image from Strapi!
+
+## 🎉 Congratulations!
+
+You've successfully set up Strapi-NextGen Framework! The image you see is:
+- ✅ **Type-safe** - TypeScript knows all the fields
+- ✅ **Optimized** - Next.js Image optimization applied
+- ✅ **Cached** - Automatically cached with ISR
+- ✅ **Accessible** - Alt text from Strapi included
+
+## What's Next?
+
+import { Cards, Card } from 'nextra/components'
+
+<Cards>
+  <Card title="API Reference →" href="/api-reference/strapi-image" />
+  <Card title="Set Up SEO Metadata →" href="/guides/seo-metadata" />
+  <Card title="Enable Preview Mode →" href="/guides/preview-mode" />
+  <Card title="Set Up Revalidation →" href="/guides/revalidation-webhook" />
+</Cards>
+
+## Troubleshooting
+
+### Image not showing?
+
+1. Check that `NEXT_PUBLIC_STRAPI_URL` is correct in `.env.local`
+2. Verify the image exists in Strapi Media Library
+3. Check that GraphQL plugin is enabled in Strapi
+4. Run `npm run codegen` to regenerate types
+
+### TypeScript errors?
+
+1. Ensure you ran `npm run codegen`
+2. Check that `graphql/generated.ts` was created
+3. Restart your TypeScript server (VS Code: `Cmd/Ctrl + Shift + P` → "Restart TS Server")
+
+### Need help?
+
+- 📖 [Full API Documentation](/api-reference)
+- 🐛 [Report Issues](https://github.com/DDevFurkanPasa/NextGen/issues)
+- 💬 [GitHub Discussions](https://github.com/DDevFurkanPasa/NextGen/discussions)

@@ -1,0 +1,662 @@
+# Type Safety Approach
+
+How Strapi-NextGen Framework achieves end-to-end type safety from CMS to UI without manual type definitions.
+
+## Overview
+
+Type safety in Strapi-NextGen Framework is **automatic** and **comprehensive**:
+
+```
+Strapi Schema → GraphQL Schema → TypeScript Types → React Components
+```
+
+**Zero manual type definitions required.**
+
+## The Type Safety Stack
+
+### 1. GraphQL Schema (Source of Truth)
+
+Strapi automatically generates a GraphQL schema from your content types:
+
+```graphql
+type Article {
+  id: ID!
+  attributes: ArticleAttributes
+}
+
+type ArticleAttributes {
+  title: String!
+  content: String
+  publishedAt: DateTime
+  author: AuthorEntityResponse
+  image: UploadFileEntityResponse
+}
+```
+
+### 2. GraphQL Queries (Explicit Data Shape)
+
+You define exactly what data you need:
+
+```graphql filename="graphql/queries/getArticle.graphql"
+query GetArticle($slug: String!) {
+  articles(filters: { slug: { eq: $slug } }) {
+    data {
+      id
+      attributes {
+        title
+        content
+        publishedAt
+        author {
+          data {
+            attributes {
+              name
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### 3. TypeScript Generation (Automatic)
+
+GraphQL Code Generator creates TypeScript types:
+
+```bash
+npm run codegen
+```
+
+Generates:
+
+```ts filename="graphql/generated.ts"
+export type GetArticleQuery = {
+  __typename?: 'Query';
+  articles?: {
+    __typename?: 'ArticleEntityResponseCollection';
+    data: Array<{
+      __typename?: 'ArticleEntity';
+      id?: string | null;
+      attributes?: {
+        __typename?: 'Article';
+        title: string;
+        content?: string | null;
+        publishedAt?: any | null;
+        author?: {
+          __typename?: 'AuthorEntityResponse';
+          data?: {
+            __typename?: 'AuthorEntity';
+            attributes?: {
+              __typename?: 'Author';
+              name: string;
+            } | null;
+          } | null;
+        } | null;
+      } | null;
+    }>;
+  } | null;
+};
+```
+
+### 4. Runtime Usage (Fully Typed)
+
+Use with complete type safety:
+
+```tsx filename="app/blog/[slug]/page.tsx"
+import { strapi } from '@/lib/strapi';
+import { GetArticleDocument } from '@/graphql/generated';
+
+export default async function ArticlePage({ 
+  params 
+}: { 
+  params: { slug: string } 
+}) {
+  const data = await strapi.rawQuery(GetArticleDocument, {
+    slug: params.slug,
+  });
+
+  // TypeScript knows the exact structure
+  const article = data.articles?.data[0]?.attributes;
+  //    ^? const article: { title: string; content?: string | null; ... }
+
+  return (
+    <article>
+      <h1>{article?.title}</h1>
+      {/* Full autocomplete ✅ */}
+      <p>{article?.author?.data?.attributes?.name}</p>
+      {/*          ^? TypeScript suggests all fields */}
+    </article>
+  );
+}
+```
+
+## How It Works
+
+### GraphQL Code Generator Configuration
+
+```ts filename="codegen.ts"
+import type { CodegenConfig } from '@graphql-codegen/cli';
+
+const config: CodegenConfig = {
+  // Source: Strapi GraphQL endpoint
+  schema: process.env.NEXT_PUBLIC_STRAPI_GRAPHQL_URL || 'http://localhost:1337/graphql',
+  
+  // Input: Your .graphql query files
+  documents: ['graphql/**/*.graphql'],
+  
+  // Output: Generated TypeScript types
+  generates: {
+    './graphql/generated.ts': {
+      plugins: [
+        'typescript',                           // Base types
+        'typescript-operations',                // Query/mutation types
+        'typescript-graphql-request',           // Client-ready types
+      ],
+    },
+  },
+};
+
+export default config;
+```
+
+### Type Generation Flow
+
+```
+1. Read Strapi GraphQL Schema
+   ↓
+2. Read Your .graphql Queries
+   ↓
+3. Generate TypeScript Types
+   • Base types for all Strapi models
+   • Specific types for each query
+   • Document nodes for graphql-request
+   ↓
+4. Save to graphql/generated.ts
+   ↓
+5. Import & Use in Your Code
+```
+
+## Type Safety Benefits
+
+### 1. Compile-Time Errors
+
+Catch mistakes before runtime:
+
+```tsx
+const data = await strapi.rawQuery(GetArticleDocument, {
+  slug: params.slug,
+});
+
+// ❌ TypeScript error: Property 'titel' does not exist
+const title = data.articles?.data[0]?.attributes?.titel;
+//                                                  ^^^^^
+
+// ✅ Correct
+const title = data.articles?.data[0]?.attributes?.title;
+```
+
+### 2. IntelliSense Autocomplete
+
+IDE suggests all available fields:
+
+```tsx
+const article = data.articles?.data[0]?.attributes;
+
+article?.
+//       ^ IDE shows: title, content, publishedAt, author, image, etc.
+```
+
+### 3. Refactoring Safety
+
+Rename fields in Strapi:
+
+```
+1. Rename 'title' to 'headline' in Strapi
+2. Run npm run codegen
+3. TypeScript shows all places to update
+4. Fix all errors
+5. Guaranteed to work
+```
+
+### 4. Null Safety
+
+TypeScript knows which fields can be null:
+
+```ts
+const article = data.articles?.data[0]?.attributes;
+
+// TypeScript knows these are optional
+if (article?.content) {
+  // ✅ Safe to use
+  const content = article.content;
+}
+
+// TypeScript enforces checking
+const content = article.content;
+//    ^^^^^^^ Type: string | null | undefined
+
+// Must handle null/undefined
+const safeContent = article?.content ?? 'No content';
+```
+
+## Type Generation Patterns
+
+### Basic Query
+
+```graphql filename="graphql/queries/getPage.graphql"
+query GetPage($slug: String!) {
+  pages(filters: { slug: { eq: $slug } }) {
+    data {
+      attributes {
+        title
+        content
+      }
+    }
+  }
+}
+```
+
+**Generated Type**:
+```ts
+export type GetPageQuery = {
+  pages?: {
+    data: Array<{
+      attributes?: {
+        title: string;
+        content?: string | null;
+      } | null;
+    }>;
+  } | null;
+};
+```
+
+### Fragment for Reusability
+
+```graphql filename="graphql/fragments/image.graphql"
+fragment ImageData on UploadFile {
+  url
+  alternativeText
+  width
+  height
+  formats
+}
+```
+
+```graphql filename="graphql/queries/getArticle.graphql"
+query GetArticle {
+  article {
+    data {
+      attributes {
+        image {
+          data {
+            attributes {
+              ...ImageData
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+**Generated Type** (includes fragment):
+```ts
+export type ImageDataFragment = {
+  __typename?: 'UploadFile';
+  url: string;
+  alternativeText?: string | null;
+  width?: number | null;
+  height?: number | null;
+  formats?: any | null;
+};
+```
+
+### Nested Relations
+
+```graphql
+query GetArticleWithAuthor {
+  article {
+    data {
+      attributes {
+        title
+        author {
+          data {
+            attributes {
+              name
+              avatar {
+                data {
+                  attributes {
+                    url
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+**Generated Type** (deeply nested):
+```ts
+export type GetArticleWithAuthorQuery = {
+  article?: {
+    data?: {
+      attributes?: {
+        title: string;
+        author?: {
+          data?: {
+            attributes?: {
+              name: string;
+              avatar?: {
+                data?: {
+                  attributes?: {
+                    url: string;
+                  } | null;
+                } | null;
+              } | null;
+            } | null;
+          } | null;
+        } | null;
+      } | null;
+    } | null;
+  } | null;
+};
+```
+
+## Runtime Type Safety
+
+### Zod Validation (Optional)
+
+For additional runtime safety:
+
+```ts filename="lib/validators.ts"
+import { z } from 'zod';
+
+// Define runtime schema
+const ArticleSchema = z.object({
+  title: z.string(),
+  content: z.string().optional(),
+  publishedAt: z.string().datetime().optional(),
+});
+
+// Validate at runtime
+export function validateArticle(data: unknown) {
+  return ArticleSchema.parse(data);
+}
+```
+
+```tsx filename="app/blog/[slug]/page.tsx"
+import { validateArticle } from '@/lib/validators';
+
+export default async function Page({ params }: { params: { slug: string } }) {
+  const data = await strapi.rawQuery(GetArticleDocument, {
+    slug: params.slug,
+  });
+
+  const article = data.articles?.data[0]?.attributes;
+  
+  // Optional: Runtime validation
+  const validated = validateArticle(article);
+  //    ^? Type: { title: string; content?: string; publishedAt?: string }
+}
+```
+
+### Error Boundaries with Types
+
+```tsx
+import { ComponentErrorBoundary } from 'strapi-nextgen-framework';
+
+type SectionProps = {
+  title: string;
+  subtitle?: string;
+};
+
+<ComponentErrorBoundary<SectionProps>
+  componentType="sections.hero"
+  fallback={(error, props) => {
+    // TypeScript knows props shape
+    return <div>Error in {props?.title}</div>;
+  }}
+>
+  <HeroSection title="..." subtitle="..." />
+</ComponentErrorBoundary>
+```
+
+## Type-Safe Component Props
+
+### Extracting Types
+
+```ts filename="types/article.ts"
+import type { GetArticleQuery } from '@/graphql/generated';
+
+// Extract article type from query
+export type Article = NonNullable<
+  NonNullable<
+    GetArticleQuery['articles']
+  >['data'][0]['attributes']
+>;
+```
+
+### Using in Components
+
+```tsx filename="components/ArticleCard.tsx"
+import type { Article } from '@/types/article';
+
+interface ArticleCardProps {
+  article: Article;
+}
+
+export function ArticleCard({ article }: ArticleCardProps) {
+  return (
+    <article>
+      <h2>{article.title}</h2>
+      {/*        ^? TypeScript knows this is string */}
+      <p>{article.content}</p>
+      {/*        ^? TypeScript knows this is string | null */}
+    </article>
+  );
+}
+```
+
+## Best Practices
+
+### 1. Always Run Codegen After Schema Changes
+
+```bash
+# Workflow
+1. Update Strapi content type
+2. npm run codegen
+3. Fix TypeScript errors
+4. Test
+5. Commit
+```
+
+Add to package.json:
+
+```json
+{
+  "scripts": {
+    "dev": "npm run codegen && next dev",
+    "build": "npm run codegen && next build"
+  }
+}
+```
+
+### 2. Use Type Guards
+
+```ts
+function isArticle(data: unknown): data is Article {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'title' in data &&
+    typeof data.title === 'string'
+  );
+}
+
+// Usage
+if (isArticle(article)) {
+  // TypeScript knows article is Article type
+  console.log(article.title);
+}
+```
+
+### 3. Extract Complex Types
+
+```ts
+// ❌ Don't inline complex types
+function MyComponent({ 
+  data 
+}: { 
+  data: GetArticleQuery['articles']['data'][0]['attributes'] 
+}) {
+  // Hard to read
+}
+
+// ✅ Extract to named type
+type ArticleData = NonNullable<
+  NonNullable<GetArticleQuery['articles']>['data'][0]['attributes']
+>;
+
+function MyComponent({ data }: { data: ArticleData }) {
+  // Clear and reusable
+}
+```
+
+### 4. Use Strict TypeScript Config
+
+```json filename="tsconfig.json"
+{
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true
+  }
+}
+```
+
+## Type Safety Checklist
+
+Before deploying:
+
+- [ ] Run `npm run codegen` with latest schema
+- [ ] No TypeScript errors in build
+- [ ] All optional fields handled (null checks)
+- [ ] Type guards used where needed
+- [ ] Runtime validation for user input
+- [ ] Error boundaries catch type errors
+
+## Handling Type Complexity
+
+### Deeply Nested Types
+
+```ts
+// ❌ Hard to work with
+const authorName = data?.articles?.data[0]?.attributes?.author?.data?.attributes?.name;
+
+// ✅ Extract early
+const article = data?.articles?.data[0]?.attributes;
+const author = article?.author?.data?.attributes;
+const authorName = author?.name;
+```
+
+### Union Types
+
+```graphql
+query GetSections {
+  page {
+    data {
+      attributes {
+        sections {
+          __typename
+          ... on ComponentSectionsHero {
+            title
+          }
+          ... on ComponentSectionsCta {
+            text
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+**Generated Type**:
+```ts
+type Section = 
+  | { __typename: 'ComponentSectionsHero'; title: string }
+  | { __typename: 'ComponentSectionsCta'; text: string };
+
+// Type narrowing
+function renderSection(section: Section) {
+  switch (section.__typename) {
+    case 'ComponentSectionsHero':
+      return <Hero title={section.title} />;
+      //                   ^? TypeScript knows: string
+    case 'ComponentSectionsCta':
+      return <Cta text={section.text} />;
+      //                 ^? TypeScript knows: string
+  }
+}
+```
+
+## Troubleshooting
+
+### Types Not Updating
+
+**Problem**: Changed Strapi schema but types still old
+
+**Solution**:
+```bash
+# 1. Regenerate types
+npm run codegen
+
+# 2. Restart TypeScript server (VS Code)
+Cmd/Ctrl + Shift + P → "Restart TS Server"
+
+# 3. Clear Next.js cache
+rm -rf .next
+```
+
+### GraphQL Errors
+
+**Problem**: Codegen fails with GraphQL errors
+
+**Solution**:
+```bash
+# 1. Check Strapi is running
+curl http://localhost:1337/graphql
+
+# 2. Verify GraphQL plugin enabled
+# Strapi admin → Settings → GraphQL
+
+# 3. Check query syntax
+# Use GraphQL Playground: http://localhost:1337/graphql
+```
+
+### Type Too Complex
+
+**Problem**: TypeScript complains type is too complex
+
+**Solution**:
+```ts
+// Break down complex types
+type ArticleBase = GetArticleQuery['articles']['data'][0];
+type ArticleAttrs = NonNullable<ArticleBase['attributes']>;
+type Article = ArticleAttrs;
+
+// Instead of one giant type
+```
+
+## See Also
+
+- [GraphQL Code Generator](https://the-guild.dev/graphql/codegen)
+- [GraphQL vs REST](/concepts/graphql-vs-rest)
+- [Framework Architecture](/concepts/architecture)
+- [Testing Philosophy](/concepts/testing-philosophy)

@@ -50,8 +50,7 @@ lerna-debug.log*
 *.sln
 *.sw?
 
-# Documentation
-docs/
+memory-bank/*
 
 # OS
 Thumbs.db

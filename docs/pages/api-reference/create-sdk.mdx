@@ -1,0 +1,544 @@
+# createStrapiSDK
+
+Initialize the Strapi GraphQL SDK client with automatic caching and type safety.
+
+## Import
+
+```tsx
+import { createStrapiSDK } from 'strapi-nextgen-framework';
+```
+
+## Usage
+
+```ts filename="lib/strapi.ts"
+import { createStrapiSDK } from 'strapi-nextgen-framework';
+
+export const strapi = createStrapiSDK({
+  url: process.env.NEXT_PUBLIC_STRAPI_GRAPHQL_URL!,
+  token: process.env.STRAPI_API_TOKEN,
+});
+```
+
+## Configuration
+
+### `config` (required)
+
+**Type**: `StrapiSDKConfig`
+
+Configuration object for the SDK.
+
+```ts
+interface StrapiSDKConfig {
+  url: string;
+  token?: string;
+  locale?: string;
+  logging?: {
+    queries?: boolean;
+    errors?: boolean;
+  };
+  cache?: {
+    revalidate?: number;
+    tags?: string[];
+  };
+}
+```
+
+## Configuration Options
+
+### `url` (required)
+
+**Type**: `string`
+
+The GraphQL endpoint URL for your Strapi instance.
+
+```ts
+const strapi = createStrapiSDK({
+  url: 'http://localhost:1337/graphql',
+});
+```
+
+**Environment Variable Pattern**:
+```bash
+NEXT_PUBLIC_STRAPI_GRAPHQL_URL=http://localhost:1337/graphql
+```
+
+### `token` (optional)
+
+**Type**: `string | undefined`
+
+API token for authenticated requests. Required for private content types.
+
+```ts
+const strapi = createStrapiSDK({
+  url: process.env.NEXT_PUBLIC_STRAPI_GRAPHQL_URL!,
+  token: process.env.STRAPI_API_TOKEN, // Secret, don't expose to client
+});
+```
+
+**Environment Variable Pattern**:
+```bash
+STRAPI_API_TOKEN=your-api-token-here
+```
+
+**Security Note**: Never expose API tokens in client-side code. Use server components or API routes.
+
+### `locale` (optional)
+
+**Type**: `string | undefined`
+
+Default locale for internationalized content.
+
+```ts
+const strapi = createStrapiSDK({
+  url: process.env.NEXT_PUBLIC_STRAPI_GRAPHQL_URL!,
+  locale: 'en',
+});
+```
+
+**Override per query**:
+```ts
+const data = await strapi.getPage('home', GetHomePageDocument, {
+  locale: 'fr', // Override default
+});
+```
+
+### `logging` (optional)
+
+**Type**: `{ queries?: boolean; errors?: boolean }`
+
+Enable logging for debugging.
+
+```ts
+const strapi = createStrapiSDK({
+  url: process.env.NEXT_PUBLIC_STRAPI_GRAPHQL_URL!,
+  logging: {
+    queries: process.env.NODE_ENV === 'development', // Log in dev only
+    errors: true, // Always log errors
+  },
+});
+```
+
+**Output**:
+```bash
+[Strapi SDK] Query: GetHomePage
+[Strapi SDK] Variables: { locale: "en" }
+[Strapi SDK] Duration: 45ms
+```
+
+### `cache` (optional)
+
+**Type**: `{ revalidate?: number; tags?: string[] }`
+
+Default cache configuration for all queries.
+
+```ts
+const strapi = createStrapiSDK({
+  url: process.env.NEXT_PUBLIC_STRAPI_GRAPHQL_URL!,
+  cache: {
+    revalidate: 3600, // 1 hour default
+    tags: ['strapi'],  // Add to all cache tags
+  },
+});
+```
+
+## SDK Methods
+
+### `getPage(slug, document, variables?)`
+
+Fetch a single page by slug.
+
+**Parameters**:
+- `slug` (string) - Page slug
+- `document` (TypedDocumentNode) - GraphQL query document
+- `variables?` (object) - Additional GraphQL variables
+
+**Returns**: Query result with full type safety
+
+**Example**:
+```ts
+const data = await strapi.getPage('home', GetHomePageDocument);
+const page = data.page?.data?.attributes;
+```
+
+**Generated Cache Tag**: `page-{slug}`
+
+### `getCollection(type, document, variables?)`
+
+Fetch a collection of items.
+
+**Parameters**:
+- `type` (string) - Collection type (e.g., 'articles')
+- `document` (TypedDocumentNode) - GraphQL query document
+- `variables?` (object) - Filters, pagination, sorting
+
+**Returns**: Query result with full type safety
+
+**Example**:
+```ts
+const data = await strapi.getCollection('articles', GetArticlesDocument, {
+  filters: { publishedAt: { notNull: true } },
+  sort: 'publishedAt:desc',
+  pagination: { limit: 10 },
+});
+```
+
+**Generated Cache Tag**: `{type}` (e.g., `articles`)
+
+### `getGlobal(name, document, variables?)`
+
+Fetch global singleton data.
+
+**Parameters**:
+- `name` (string) - Global name (e.g., 'header', 'footer')
+- `document` (TypedDocumentNode) - GraphQL query document
+- `variables?` (object) - Additional variables
+
+**Returns**: Query result with full type safety
+
+**Example**:
+```ts
+const data = await strapi.getGlobal('header', GetHeaderDocument);
+const header = data.global?.data?.attributes?.header;
+```
+
+**Generated Cache Tag**: `global-{name}`
+
+### `rawQuery(document, variables?)`
+
+Execute a raw GraphQL query with full control.
+
+**Parameters**:
+- `document` (TypedDocumentNode) - GraphQL query document
+- `variables?` (object) - GraphQL variables
+
+**Returns**: Query result with full type safety
+
+**Example**:
+```ts
+const data = await strapi.rawQuery(CustomQueryDocument, {
+  customVariable: 'value',
+});
+```
+
+**Cache Tag**: Must be specified manually in query or use SDK defaults
+
+## Automatic Features
+
+### 1. Draft Mode Integration
+
+Automatically detects Next.js draft mode:
+
+```ts
+import { draftMode } from 'next/headers';
+
+export default async function Page() {
+  // SDK automatically uses publicationState: PREVIEW in draft mode
+  const data = await strapi.getPage('home', GetHomePageDocument);
+  
+  // Returns draft + published content when draft mode enabled
+  // Returns published only when draft mode disabled
+}
+```
+
+### 2. Cache Tagging
+
+All queries automatically get cache tags:
+
+```ts
+const data = await strapi.getPage('about', GetAboutPageDocument);
+// Auto-tagged: 'page-about'
+
+const articles = await strapi.getCollection('articles', GetArticlesDocument);
+// Auto-tagged: 'articles'
+```
+
+**Use with revalidation**:
+```ts
+import { revalidateTag } from 'next/cache';
+
+revalidateTag('page-about');  // Invalidate specific page
+revalidateTag('articles');     // Invalidate all articles
+```
+
+### 3. Type Safety
+
+All methods return fully typed results from GraphQL Code Generator:
+
+```ts
+// TypeScript knows the exact structure
+const data = await strapi.getPage('home', GetHomePageDocument);
+
+const title = data.page?.data?.attributes?.title; // string | null | undefined
+// Full autocomplete ✅
+```
+
+### 4. Error Handling
+
+Automatic error handling with logging:
+
+```ts
+try {
+  const data = await strapi.getPage('home', GetHomePageDocument);
+} catch (error) {
+  // SDK logs error if logging.errors: true
+  // Error includes GraphQL errors and network errors
+}
+```
+
+## Complete Example
+
+### Setup
+
+```ts filename="lib/strapi.ts"
+import { createStrapiSDK } from 'strapi-nextgen-framework';
+
+export const strapi = createStrapiSDK({
+  url: process.env.NEXT_PUBLIC_STRAPI_GRAPHQL_URL!,
+  token: process.env.STRAPI_API_TOKEN,
+  locale: 'en',
+  logging: {
+    queries: process.env.NODE_ENV === 'development',
+    errors: true,
+  },
+  cache: {
+    revalidate: 3600,
+    tags: ['strapi'],
+  },
+});
+```
+
+### Usage in Pages
+
+```tsx filename="app/page.tsx"
+import { strapi } from '@/lib/strapi';
+import { GetHomePageDocument } from '@/graphql/generated';
+
+export default async function HomePage() {
+  const data = await strapi.getPage('home', GetHomePageDocument);
+  const page = data.page?.data?.attributes;
+
+  if (!page) {
+    return <div>Page not found</div>;
+  }
+
+  return (
+    <main>
+      <h1>{page.title}</h1>
+      <p>{page.description}</p>
+    </main>
+  );
+}
+```
+
+### Usage in API Routes
+
+```ts filename="app/api/articles/route.ts"
+import { NextResponse } from 'next/server';
+import { strapi } from '@/lib/strapi';
+import { GetArticlesDocument } from '@/graphql/generated';
+
+export async function GET() {
+  const data = await strapi.getCollection('articles', GetArticlesDocument, {
+    pagination: { limit: 10 },
+  });
+
+  return NextResponse.json(data.articles?.data || []);
+}
+```
+
+## Advanced Patterns
+
+### Multiple Locales
+
+```ts filename="lib/strapi.ts"
+export function getStrapiSDK(locale = 'en') {
+  return createStrapiSDK({
+    url: process.env.NEXT_PUBLIC_STRAPI_GRAPHQL_URL!,
+    locale,
+  });
+}
+
+// Usage
+const strapi = getStrapiSDK(params.lang);
+const data = await strapi.getPage('home', GetHomePageDocument);
+```
+
+### Custom Headers
+
+```ts
+import { GraphQLClient } from 'graphql-request';
+
+const client = new GraphQLClient(process.env.NEXT_PUBLIC_STRAPI_GRAPHQL_URL!, {
+  headers: {
+    Authorization: `Bearer ${process.env.STRAPI_API_TOKEN}`,
+    'X-Custom-Header': 'value',
+  },
+});
+
+// Then use with SDK...
+```
+
+### Request Memoization
+
+```ts
+import { cache } from 'react';
+
+export const getPageCached = cache((slug: string) => {
+  return strapi.getPage(slug, GetPageDocument);
+});
+
+// Multiple calls in same render = single request
+const data1 = await getPageCached('home');
+const data2 = await getPageCached('home'); // Reuses result
+```
+
+## TypeScript
+
+### Type Definitions
+
+```ts
+import type {
+  StrapiSDKConfig,
+  StrapiSDK,
+} from 'strapi-nextgen-framework';
+
+const config: StrapiSDKConfig = {
+  url: 'http://localhost:1337/graphql',
+  token: 'token',
+};
+
+const sdk: StrapiSDK = createStrapiSDK(config);
+```
+
+### Generated Types
+
+All query results are typed from your GraphQL schema:
+
+```ts
+import type { GetHomePageQuery } from '@/graphql/generated';
+
+const data: GetHomePageQuery = await strapi.rawQuery(GetHomePageDocument, {});
+```
+
+## Common Issues
+
+### GraphQL Endpoint Not Found
+
+**Problem**: 404 error when calling SDK
+
+**Solutions**:
+1. Verify GraphQL plugin is enabled in Strapi
+2. Check URL is correct: `http://localhost:1337/graphql`
+3. Test in GraphQL Playground: `http://localhost:1337/graphql`
+
+### Authentication Errors
+
+**Problem**: 401 or 403 errors
+
+**Solutions**:
+1. Verify API token is valid in Strapi admin
+2. Check token has correct permissions for content type
+3. Ensure token is not exposed to client (use server components)
+4. Test with Strapi's GraphQL playground
+
+### Type Errors
+
+**Problem**: TypeScript errors on query results
+
+**Solutions**:
+1. Run `npm run codegen` to regenerate types
+2. Verify GraphQL query matches schema
+3. Check `graphql/generated.ts` was created
+4. Restart TypeScript server
+
+### Cache Not Working
+
+**Problem**: Same data fetched repeatedly
+
+**Solutions**:
+1. Check you're in production mode: `npm run build && npm start`
+2. Verify cache configuration in SDK
+3. Use Next.js cache debugging: `next build --debug`
+4. Check cache tags match in revalidation webhook
+
+## Environment Variables
+
+### Required
+
+```bash filename=".env.local"
+NEXT_PUBLIC_STRAPI_GRAPHQL_URL=http://localhost:1337/graphql
+```
+
+### Optional
+
+```bash filename=".env.local"
+# Authentication (keep secret - don't expose to client)
+STRAPI_API_TOKEN=your-api-token-here
+
+# Default locale
+STRAPI_DEFAULT_LOCALE=en
+```
+
+### Production
+
+```bash filename=".env.production"
+NEXT_PUBLIC_STRAPI_GRAPHQL_URL=https://api.your-site.com/graphql
+STRAPI_API_TOKEN=your-production-token
+```
+
+## Best Practices
+
+### 1. Create Single Instance
+
+```ts
+// ✅ lib/strapi.ts - Single instance
+export const strapi = createStrapiSDK({ ... });
+
+// ❌ Don't create multiple instances
+const strapi1 = createStrapiSDK({ ... });
+const strapi2 = createStrapiSDK({ ... });
+```
+
+### 2. Use Environment Variables
+
+```ts
+// ✅ Use env vars
+const strapi = createStrapiSDK({
+  url: process.env.NEXT_PUBLIC_STRAPI_GRAPHQL_URL!,
+});
+
+// ❌ Don't hardcode
+const strapi = createStrapiSDK({
+  url: 'http://localhost:1337/graphql',
+});
+```
+
+### 3. Enable Logging in Development
+
+```ts
+const strapi = createStrapiSDK({
+  url: process.env.NEXT_PUBLIC_STRAPI_GRAPHQL_URL!,
+  logging: {
+    queries: process.env.NODE_ENV === 'development',
+    errors: true,
+  },
+});
+```
+
+### 4. Use Appropriate Methods
+
+```ts
+// ✅ Use specific methods
+await strapi.getPage('home', GetHomePageDocument);
+await strapi.getCollection('articles', GetArticlesDocument);
+
+// ⚠️ Use rawQuery only when needed
+await strapi.rawQuery(ComplexCustomQueryDocument, {});
+```
+
+## See Also
+
+- [StrapiImage Component](/api-reference/strapi-image)
+- [Revalidation](/api-reference/revalidation)
+- [Caching Strategy](/concepts/caching-strategy)
+- [GraphQL vs REST](/concepts/graphql-vs-rest)

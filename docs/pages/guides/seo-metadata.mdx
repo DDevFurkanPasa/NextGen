@@ -1,0 +1,581 @@
+# How to Add SEO Metadata
+
+Set up comprehensive SEO metadata for your Next.js pages using Strapi CMS data.
+
+## Overview
+
+This guide shows you how to:
+- ✅ Create SEO component in Strapi
+- ✅ Generate Next.js metadata from Strapi
+- ✅ Add Open Graph and Twitter cards
+- ✅ Implement structured data (JSON-LD)
+- ✅ Set up default fallbacks
+
+## Step 1: Create SEO Component in Strapi
+
+### Option 1: Install Strapi SEO Plugin (Recommended)
+
+```bash
+# In your Strapi project
+npm install @strapi/plugin-seo
+```
+
+Then restart Strapi. The plugin adds a ready-to-use SEO component.
+
+### Option 2: Create Custom SEO Component
+
+In Strapi Content-Type Builder:
+
+1. Create component `shared.seo`
+2. Add fields:
+
+| Field Name | Type | Notes |
+|------------|------|-------|
+| `metaTitle` | Text | Page title (60 chars) |
+| `metaDescription` | Text (Long) | Description (160 chars) |
+| `keywords` | Text | Comma-separated |
+| `canonicalURL` | Text | Canonical URL |
+| `metaRobots` | Text | e.g., "index, follow" |
+| `metaImage` | Media (Single) | OG/Twitter image |
+| `metaSocial` | Component (Repeatable) | `shared.meta-social` |
+| `structuredData` | JSON | Schema.org data |
+
+3. Create `shared.meta-social` component:
+
+| Field Name | Type | Enum Values |
+|------------|------|-------------|
+| `socialNetwork` | Enumeration | Facebook, Twitter |
+| `title` | Text | Social title |
+| `description` | Text | Social description |
+| `image` | Media (Single) | Social image |
+
+## Step 2: Add SEO to Content Types
+
+Add SEO component to your content types:
+
+```json
+// Example: Article content type
+{
+  "attributes": {
+    "title": { "type": "string" },
+    "content": { "type": "richtext" },
+    "seo": {
+      "type": "component",
+      "component": "shared.seo"
+    }
+  }
+}
+```
+
+## Step 3: Include SEO in GraphQL Query
+
+Update your queries to include SEO data:
+
+```graphql filename="graphql/queries/getArticle.graphql"
+query GetArticle($slug: String!) {
+  articles(filters: { slug: { eq: $slug } }) {
+    data {
+      attributes {
+        title
+        content
+        seo {
+          metaTitle
+          metaDescription
+          keywords
+          canonicalURL
+          metaRobots
+          metaImage {
+            data {
+              attributes {
+                url
+                alternativeText
+                width
+                height
+              }
+            }
+          }
+          metaSocial {
+            socialNetwork
+            title
+            description
+            image {
+              data {
+                attributes {
+                  url
+                }
+              }
+            }
+          }
+          structuredData
+        }
+      }
+    }
+  }
+}
+```
+
+## Step 4: Generate Types
+
+```bash
+npm run codegen
+```
+
+## Step 5: Use in Page Metadata
+
+```tsx filename="app/blog/[slug]/page.tsx"
+import { generateStrapiMetadata } from 'strapi-nextgen-framework';
+import { strapi } from '@/lib/strapi';
+import { GetArticleDocument } from '@/graphql/generated';
+import type { Metadata } from 'next';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: { slug: string };
+}): Promise<Metadata> {
+  const data = await strapi.getCollection('articles', GetArticleDocument, {
+    filters: { slug: { eq: params.slug } },
+  });
+
+  const article = data.articles?.data[0]?.attributes;
+  const seo = article?.seo;
+
+  // Generate metadata from Strapi SEO
+  return generateStrapiMetadata(seo, {
+    // Optional: Add custom metadata
+    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL!),
+    alternates: {
+      canonical: `/blog/${params.slug}`,
+    },
+  });
+}
+
+export default async function ArticlePage({
+  params,
+}: {
+  params: { slug: string };
+}) {
+  const data = await strapi.getCollection('articles', GetArticleDocument, {
+    filters: { slug: { eq: params.slug } },
+  });
+
+  const article = data.articles?.data[0]?.attributes;
+
+  return (
+    <article>
+      <h1>{article?.title}</h1>
+      {/* Your content */}
+    </article>
+  );
+}
+```
+
+## Step 6: Add Default Metadata
+
+Create site-wide defaults:
+
+```tsx filename="app/layout.tsx"
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL!),
+  title: {
+    default: 'My Site',
+    template: '%s | My Site', // Page title | Site name
+  },
+  description: 'Default site description',
+  keywords: ['keyword1', 'keyword2'],
+  authors: [{ name: 'Your Name' }],
+  creator: 'Your Company',
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    siteName: 'My Site',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    creator: '@yourhandle',
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  );
+}
+```
+
+## Advanced Patterns
+
+### With Fallbacks
+
+```tsx
+export async function generateMetadata({
+  params,
+}: {
+  params: { slug: string };
+}): Promise<Metadata> {
+  const data = await strapi.getPage(params.slug, GetPageDocument);
+  const page = data.page?.data?.attributes;
+  const seo = page?.seo;
+
+  return generateStrapiMetadata(seo, {
+    // Fallback to page data if SEO is missing
+    title: page?.title || 'Default Title',
+    description: page?.description || 'Default description',
+    openGraph: {
+      title: seo?.metaSocial?.[0]?.title || page?.title,
+      images: seo?.metaImage?.data?.attributes?.url
+        ? [seo.metaImage.data.attributes.url]
+        : ['/default-og-image.jpg'],
+    },
+  });
+}
+```
+
+### Article-Specific Metadata
+
+```tsx
+export async function generateMetadata({
+  params,
+}: {
+  params: { slug: string };
+}): Promise<Metadata> {
+  const data = await strapi.getCollection('articles', GetArticleDocument, {
+    filters: { slug: { eq: params.slug } },
+  });
+
+  const article = data.articles?.data[0]?.attributes;
+  const seo = article?.seo;
+
+  return generateStrapiMetadata(seo, {
+    openGraph: {
+      type: 'article',
+      publishedTime: article?.publishedAt,
+      modifiedTime: article?.updatedAt,
+      authors: [article?.author?.data?.attributes?.name],
+      tags: article?.categories?.data.map((cat) => cat.attributes?.name),
+    },
+  });
+}
+```
+
+### Multi-Language Support
+
+```tsx
+export async function generateMetadata({
+  params,
+}: {
+  params: { slug: string; lang: string };
+}): Promise<Metadata> {
+  const data = await strapi.getPage(params.slug, GetPageDocument, {
+    locale: params.lang,
+  });
+
+  const page = data.page?.data?.attributes;
+  const seo = page?.seo;
+
+  return generateStrapiMetadata(seo, {
+    alternates: {
+      canonical: `/${params.lang}/${params.slug}`,
+      languages: {
+        'en': `/en/${params.slug}`,
+        'es': `/es/${params.slug}`,
+        'fr': `/fr/${params.slug}`,
+      },
+    },
+  });
+}
+```
+
+## Structured Data (JSON-LD)
+
+### Article Schema
+
+In Strapi, add to `structuredData` field:
+
+```json
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "Article Title",
+  "description": "Article description",
+  "image": "https://example.com/image.jpg",
+  "author": {
+    "@type": "Person",
+    "name": "Author Name"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Publisher Name",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://example.com/logo.png"
+    }
+  },
+  "datePublished": "2024-01-01",
+  "dateModified": "2024-01-02"
+}
+```
+
+### Programmatic Generation
+
+```tsx
+export async function generateMetadata({
+  params,
+}: {
+  params: { slug: string };
+}): Promise<Metadata> {
+  const data = await strapi.getCollection('articles', GetArticleDocument, {
+    filters: { slug: { eq: params.slug } },
+  });
+
+  const article = data.articles?.data[0]?.attributes;
+  const seo = article?.seo;
+
+  // Generate structured data programmatically
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: article?.title,
+    description: article?.excerpt,
+    image: article?.image?.data?.attributes?.url,
+    author: {
+      '@type': 'Person',
+      name: article?.author?.data?.attributes?.name,
+    },
+    datePublished: article?.publishedAt,
+    dateModified: article?.updatedAt,
+  };
+
+  return generateStrapiMetadata(
+    {
+      ...seo,
+      structuredData,
+    },
+    {
+      metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL!),
+    }
+  );
+}
+```
+
+## SEO Best Practices
+
+### 1. Optimal Lengths
+
+```tsx
+// Title: 50-60 characters
+metaTitle: 'Keep Your Title Under 60 Characters'
+
+// Description: 150-160 characters
+metaDescription: 'Keep your meta description between 150-160 characters for optimal display in search results without truncation.'
+```
+
+### 2. Unique Metadata
+
+Every page should have unique:
+- Title
+- Description
+- Canonical URL
+- OG Image (ideally)
+
+### 3. Image Specifications
+
+**Open Graph**:
+- Recommended: 1200x630px
+- Minimum: 600x315px
+- Aspect ratio: 1.91:1
+- Format: JPG, PNG
+- Max size: <5MB
+
+**Twitter Card**:
+- Recommended: 1200x675px (16:9)
+- Minimum: 300x157px
+- Format: JPG, PNG, WebP, GIF
+- Max size: <5MB
+
+### 4. Robots Meta
+
+```tsx
+// Allow indexing (default)
+metaRobots: 'index, follow'
+
+// Prevent indexing
+metaRobots: 'noindex, nofollow'
+
+// Allow indexing but don't follow links
+metaRobots: 'index, nofollow'
+```
+
+## Testing SEO
+
+### 1. Local Testing
+
+```tsx
+// View page source (not DevTools)
+// Right-click → View Page Source
+
+// Check meta tags
+<meta name="description" content="..." />
+<meta property="og:title" content="..." />
+<meta name="twitter:card" content="summary_large_image" />
+```
+
+### 2. Google Rich Results Test
+
+Visit: https://search.google.com/test/rich-results
+
+Enter your URL and check:
+- Structured data validity
+- Schema.org compliance
+- Warnings and errors
+
+### 3. Facebook Debugger
+
+Visit: https://developers.facebook.com/tools/debug/
+
+- Enter your URL
+- Check Open Graph tags
+- Preview how it appears when shared
+- Click "Scrape Again" to refresh
+
+### 4. Twitter Card Validator
+
+Visit: https://cards-dev.twitter.com/validator
+
+- Enter your URL
+- Check Twitter card rendering
+- Verify image displays correctly
+
+### 5. Automated Testing
+
+```ts filename="e2e/seo.spec.ts"
+import { test, expect } from '@playwright/test';
+
+test('article has correct SEO metadata', async ({ page }) => {
+  await page.goto('/blog/test-article');
+
+  // Check title
+  await expect(page).toHaveTitle(/Test Article.*My Site/);
+
+  // Check meta description
+  const description = page.locator('meta[name="description"]');
+  await expect(description).toHaveAttribute('content', /.{50,}/); // At least 50 chars
+
+  // Check Open Graph
+  const ogTitle = page.locator('meta[property="og:title"]');
+  await expect(ogTitle).toHaveAttribute('content', /Test Article/);
+
+  // Check Twitter card
+  const twitterCard = page.locator('meta[name="twitter:card"]');
+  await expect(twitterCard).toHaveAttribute('content', 'summary_large_image');
+
+  // Check structured data
+  const jsonLd = page.locator('script[type="application/ld+json"]');
+  const content = await jsonLd.textContent();
+  const data = JSON.parse(content!);
+  expect(data['@type']).toBe('Article');
+});
+```
+
+## Common Issues
+
+### Metadata Not Showing
+
+**Problem**: Meta tags don't appear in page source
+
+**Solutions**:
+1. Verify `generateMetadata` is exported from page
+2. Check `await` is used for async metadata
+3. View Page Source (not DevTools)
+4. Clear Next.js cache: `rm -rf .next`
+
+### Images Not in Social Previews
+
+**Problem**: Facebook/Twitter don't show image
+
+**Solutions**:
+1. Ensure image URL is absolute: `https://example.com/image.jpg`
+2. Set `metadataBase` in root layout
+3. Check image meets size requirements (1200x630px recommended)
+4. Verify image is publicly accessible
+5. Use Facebook Debugger to test
+
+### Title Too Long
+
+**Problem**: Title truncated in search results
+
+**Solutions**:
+1. Keep under 60 characters
+2. Show character count in Strapi CMS
+3. Add validation:
+
+```tsx
+if (seo?.metaTitle && seo.metaTitle.length > 60) {
+  console.warn('Meta title exceeds 60 characters:', seo.metaTitle);
+}
+```
+
+### Structured Data Errors
+
+**Problem**: Google Rich Results Test shows errors
+
+**Solutions**:
+1. Validate JSON syntax
+2. Use required fields for schema type
+3. Test with: https://validator.schema.org/
+4. Common fixes:
+   - Add `publisher` for Article type
+   - Include `logo` for Organization
+   - Use ISO 8601 for dates
+
+## Environment Variables
+
+```bash filename=".env.local"
+# Required for absolute URLs
+NEXT_PUBLIC_SITE_URL=https://your-site.com
+
+# Optional: For dynamic OG image generation
+OG_IMAGE_SERVICE_URL=https://og-image-service.com
+```
+
+## SEO Checklist
+
+Before launching:
+
+- [ ] All pages have unique titles
+- [ ] All pages have unique descriptions
+- [ ] Meta titles are 50-60 characters
+- [ ] Meta descriptions are 150-160 characters
+- [ ] All pages have canonical URLs
+- [ ] Open Graph images are 1200x630px
+- [ ] Structured data is valid (no errors in Rich Results Test)
+- [ ] Tested in Facebook Debugger
+- [ ] Tested in Twitter Card Validator
+- [ ] Robots meta is correct (`index, follow` for public pages)
+- [ ] sitemap.xml is generated
+- [ ] robots.txt is configured
+
+## Next Steps
+
+- [Set Up Revalidation](/guides/revalidation-webhook) - Auto-update SEO on content changes
+- [Fetch Global Data](/guides/fetch-global-data) - Default SEO from global settings
+- [generateStrapiMetadata API](/api-reference/generate-metadata) - Full API docs
+
+## See Also
+
+- [Next.js Metadata API](https://nextjs.org/docs/app/api-reference/functions/generate-metadata)
+- [Open Graph Protocol](https://ogp.me/)
+- [Schema.org](https://schema.org/)
+- [Google Search Central](https://developers.google.com/search)

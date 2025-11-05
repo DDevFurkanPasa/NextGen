@@ -1,0 +1,8 @@
+{
+  "preview-mode": "Set Up Preview Mode",
+  "fetch-global-data": "Fetch Global Header & Footer",
+  "revalidation-webhook": "Set Up Revalidation Webhook",
+  "seo-metadata": "Add SEO Metadata",
+  "dynamic-zones": "Render Dynamic Zones",
+  "error-handling": "Error Handling"
+}
