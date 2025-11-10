@@ -39,7 +39,7 @@ jobs:
       
       - name: Upload accessibility violations
         if: failure() && steps.a11y_tests.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: accessibility-violations
           path: |
