@@ -109,7 +109,7 @@
     "graphql": "^16.8.1",
     "graphql-request": "^6.1.0",
     "strapi-nextgen-framework": "^0.1.0",
-    "zod": "^3.22.4"
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.0",
